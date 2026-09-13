@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "Bluetooth: PhantomChannel Peripheral"
+
+menu "PhantomChannel peripheral sample"
+
+config PHANTOMCHANNEL_PERIPHERAL_TX
+	bool "Enable peripheral-side PhantomChannel TX embedding"
+	default y
+	depends on BT_CTLR && BT_LL_SW_SPLIT && BT_PERIPHERAL
+	help
+	  Enable the link-layer TX packet rewrite used by this sample. The
+	  application places a marker in a normal notification payload; the
+	  controller replaces that marker with the BLE CRC and emits the bytes
+	  after the marker in the post-CRC region.
+
+config PHANTOMCHANNEL_COVERT_LEN
+	int "Covert payload length in bytes"
+	default 16
+	range 1 240
+	depends on PHANTOMCHANNEL_PERIPHERAL_TX
+	help
+	  Number of covert payload bytes carried inside each PhantomChannel
+	  frame. This does not include the frame magic, sequence, length, or
+	  check byte.
+
+config PHANTOMCHANNEL_COVERT_MARKER_BYTE
+	int "First covert payload byte marker"
+	default 165
+	range 0 255
+	depends on PHANTOMCHANNEL_PERIPHERAL_TX
+	help
+	  Fixed first byte placed inside every covert payload. The SDR-side
+	  Phantom-aware post-processing can require this marker to reject false
+	  post-CRC candidates. The remaining covert payload bytes carry the test
+	  data pattern used for recovery-rate measurements.
+
+config PHANTOMCHANNEL_NOTIFY_INTERVAL_MS
+	int "Notification interval in milliseconds"
+	default 100
+	range 20 5000
+	help
+	  Interval between notification attempts after the central enables CCC.
+
+config PHANTOMCHANNEL_NORMAL_PREFIX_LEN
+	int "Normal notification value bytes before marker"
+	default 1
+	range 1 16
+	help
+	  Number of application notification value bytes before the 0xaa 0xaa
+	  marker. The first byte is 0x06 for HRS-like compatibility.
+
+config PHANTOMCHANNEL_STATIC_ADDRESS
+	string "Peripheral random-static address"
+	default "C0:DE:52:84:00:01"
+	help
+	  Random-static BLE identity address advertised by the sample.
+
+config PHANTOMCHANNEL_LOW_BAND_CHAN_MAP
+	bool "Request BLE data channels 0-16 for B210 40 MHz capture"
+	default n
+	depends on BT
+	help
+	  Request the low BLE data-channel classification that fits inside a
+	  40 MHz capture centered at 2420 MHz. This enables data channels 0-16
+	  (2404-2438 MHz). Advertising channel 37 at 2402 MHz is not part of
+	  the connection data channel map. This is optional because many
+	  controller builds reject peripheral-side channel-map requests.
+
+endmenu
+
+source "Kconfig.zephyr"

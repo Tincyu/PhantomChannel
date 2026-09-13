@@ -1,0 +1,124 @@
+experiment:
+  device_id: zephyr_phantom_01
+  phy: 1M
+  duration_s: 60
+  repetitions: 5
+
+distances_m:
+  - 0.5
+  - 1
+  - 2
+  - 5
+  - 10
+
+bandwidths_mhz:
+  - 4
+  - 8
+  - 20
+  - 40
+
+environments:
+  - name: lab_los
+    type: LOS
+  - name: office_nlos
+    type: NLOS
+
+capture:
+  enabled: false
+  sdr_model: B210
+  capture_bin: /path/to/BLE_encrypt_check/build-local/uhd_b210_capture_framed_udp
+  uhd_library_path: /path/to/uhd-4.6.0.0/lib
+  center_frequency_hz: 2420000000
+  sample_rate_sps: 40000000
+  gain_db: 50
+  antenna: RX2
+  usrp_args: type=b200,master_clock_rate=40e6
+  iq_duration_s: 45
+  startup_timeout_s: 30
+  queue_blocks: 1024
+  stats_interval_s: 1
+  compute_sha256: true
+  use_realtime: true
+  capture_cpus: 4-7
+  realtime_priority: 20
+
+firmware:
+  zephyr_workspace: /path/to/nrf_sdk/v3.0.0-rc1
+  sample_path: /path/to/nrf_sdk/v3.0.0-rc1/zephyr/samples/bluetooth/phantomchannel_peripheral
+  build_dir: /path/to/PhantomChannel/artifacts/firmware/phantomchannel_peripheral
+  board: nrf52840dk/nrf52840
+  ncs_toolchain: /path/to/nrf_sdk/toolchains/7cbc0036f4
+  serial_number: "1050216757"
+  reset_wait_s: 2
+
+peripheral:
+  address: C0:DE:52:84:00:01
+  data_characteristic_uuid: 70630002-5048-414e-544f-4d4348414e4c
+  notify_interval_ms: 20
+  min_notify_fraction: 0.5
+  scan_s: 7
+  connect_wait_s: 8
+  notify_s: 10
+
+central:
+  hci_device: hci0
+  set_host_channel_classification: false
+  data_channel_map_hex: ffff010000
+  restore_channel_map_hex: ffffffff1f
+  require_success: false
+
+rtt:
+  jlink_device: NRF52840_XXAA
+  interface: SWD
+  speed: 4000
+  channel: 0
+  post_disconnect_s: 4
+
+parser:
+  enabled: false
+  source_project_root: /path/to/BLE_encrypt_check
+  python: /path/to/BLE_encrypt_check/.venv-cuda/bin/python
+  entrypoint: experiment/bt_40m_pfb_realtime.py
+  iq_format: int16
+  processing_bandwidth_policy: analysis
+  processing_bandwidth_hz: 40000000
+  subband_sample_rate_sps: 4000000
+  chunk_samples: 16000000
+  overlap_samples: 200000
+  ble_candidate_detector: fixed
+  ble_threshold: 0.01
+  ble_score_threshold: 3.0
+  ble_lpf_cutoff_hz: 1000000
+  cleanup_numtaps: 31
+  use_cuda: true
+  cuda_device: 0
+  cuda_pfb_backend: kernel_multi_float_phase_t
+  cuda_cleanup_backend: kernel_multi_float
+  cuda_target_dsp_materialization: full
+  cuda_segment_copy_merge_gap_samples: 4096
+  cuda_segment_copy_max_merged_samples: 262144
+  ble_parser_backend: cpp
+  bredr_parser_backend: hybrid
+  cpp_parser_threads: 4
+  native_segment_input: legacy
+  learned_parser_fast_path: false
+  target_selection: full
+  quiet: true
+  timing: true
+  skip_bredr: true
+  parser_cpus: 0-3,8-19
+
+phantom_postprocess:
+  enabled: true
+  tolerance_us: 18
+  pre_margin_us: 40
+  post_margin_us: 80
+  lowpass_hz: 900000
+  smooth_us: 1.5
+  threshold_sigma: 8
+  min_threshold_ratio: 2
+  prediction_search_radius_us: 30000
+
+paths:
+  output_root: ./experiments
+  results_root: ./results

@@ -1,0 +1,48 @@
+# X310 rate-test configuration for nRF52840 central -> phone GATT server.
+# The phone advertises PhantomSink; the flashed nRF52840 central connects to it
+# and sends Write Without Response values. Distance is intentionally disabled.
+
+experiment:
+  name: x310_central_phone_rate
+  duration_s: 10
+  distance_experiment_enabled: false
+
+capture:
+  requested_sample_rate_sps: 80000000
+  expected_sample_rate_sps: 100000000
+  bandwidth_hz: 80000000
+  center_frequency_hz: 2440000000
+  gain_db: 50
+  antenna: RX2
+  channel: 0
+  usrp_args: type=x300,addr=192.168.40.2,master_clock_rate=200e6
+
+parser:
+  source_project_root: /path/to/BLE_encrypt_check
+  python: /path/to/PhantomChannel/.venv-cuda/bin/python
+  entrypoint: /path/to/BLE_encrypt_check/experiment/bt_40m_pfb_realtime.py
+  subband_sample_rate_sps: 4000000
+  chunk_samples: 16000000
+  overlap_samples: 200000
+  cpp_parser_threads: 4
+  cuda_device: 0
+
+phone:
+  device_name: PhantomSink
+  role: gatt_server
+  service_uuid: 0000ff00-0000-1000-8000-00805f9b34fb
+  characteristic_uuid: 0000ff01-0000-1000-8000-00805f9b34fb
+  firmware_variant: phantomchannel_central_gatt_write
+  target_mode: phone-nearest
+  write_interval_ms: 200
+  covert_len_bytes: 2
+  dynamic_timing: true
+  rx_guard_us: 0
+  phy: 2M
+  force_symmetric_phy: true
+  rtt_available: false
+  bluez_central_used: false
+
+firmware:
+  build_dir: /path/to/PhantomChannel/artifacts/firmware/phantomchannel_central_gatt_write/phone_nearest
+  prj_conf: /path/to/nrf_sdk/v3.0.0-rc1/zephyr/samples/bluetooth/phantomchannel_central_gatt_write/prj.conf

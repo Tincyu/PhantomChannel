@@ -1,0 +1,51 @@
+analysis_id: bpl_caf_20260809_d3m
+sample_rate_sps: 100000000.0
+subband_sample_rate_sps: 4000000.0
+center_frequency_hz: 2440000000.0
+bandwidth_hz: 80000000.0
+phy: LE_1M
+development_windows_seconds:
+  - [0.25, 0.50]
+formal_windows_seconds:
+  - [1.0, 3.0]
+  - [4.0, 6.0]
+  - [7.0, 9.0]
+physical_detector:
+  block_samples: 10000
+  threshold_ratio: 4.0
+  merge_gap_blocks: 2
+  pre_blocks: 2
+  post_blocks: 2
+  minimum_blocks: 1
+  frequency_fft_samples: 262144
+  max_bursts_per_window: 5000
+bpl:
+  phy: LE_1M
+  sample_rate_sps: 4000000.0
+  symbol_rate_sps: 1000000.0
+  gaussian_bt: 0.5
+  gaussian_span_symbols: 4
+  template_mode: preamble
+  min_normalized_peak: 0.20
+  min_peak_ratio: 1.05
+  max_peak_width_samples: 64
+  competing_peak_relative_threshold: 0.80
+  peak_guard_samples: 12
+  cfo_search_hz: [-100000.0, -50000.0, 0.0, 50000.0, 100000.0]
+  search_guard_samples: 16
+  search_tail_samples: 512
+fixed_guard_us: 20.0
+caf_offset_samples: [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8]
+source_runs:
+  - run_id: 20260807_phonehrs_x31080m_los_d3m_rep2
+    condition: LOS
+    path: /path/to/PhantomChannel/testdata/20260807_phonehrs_x31080m_los_d3m_rep2
+  - run_id: 20260807_phonehrs_x31080m_los_d3m_rep3
+    condition: LOS
+    path: /path/to/PhantomChannel/testdata/20260807_phonehrs_x31080m_los_d3m_rep3
+  - run_id: 20260807_phonehrs_x31080m_nlos_d3m_rep2
+    condition: NLOS
+    path: /path/to/PhantomChannel/testdata/20260807_phonehrs_x31080m_nlos_d3m_rep2
+  - run_id: 20260807_phonehrs_x31080m_nlos_d3m_rep3
+    condition: NLOS
+    path: /path/to/PhantomChannel/testdata/20260807_phonehrs_x31080m_nlos_d3m_rep3

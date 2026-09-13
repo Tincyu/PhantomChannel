@@ -1,0 +1,83 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.venv-*/
+venv/
+
+# Build systems and generated build trees
+**/build/
+**/build-*/
+**/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/.west/
+out/
+dist/
+
+# Repository-generated artifacts and experiment outputs
+/artifacts/
+/log/
+/logs/
+**/logs/
+
+# Firmware and compiler products
+*.o
+*.obj
+*.a
+*.d
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.uf2
+
+# Runtime logs and command output
+*.log
+*.out
+*.out.bin
+
+# IQ/SDR captures and capture metadata directories
+**/iq/
+**/IQ/
+*.iq
+*.iqs
+*.cfile
+*.cf32
+*.cs16
+*.sc8
+*.sc16
+*.raw
+*.pcap
+*.pcapng
+*.wav
+
+# Extensionless packet captures produced by local capture runs
+/37
+/38
+/39
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local workstation paths and credentials
+/config/local.env
+*.env
+*.env.*
+!*.env.example
+**/credentials/
+*.pem
+*.key
+*.p12
+*.pcap
+*.pcapng
+*.wav

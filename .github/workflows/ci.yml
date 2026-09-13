@@ -1,0 +1,23 @@
+name: offline-tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install offline test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Run offline regression suite
+        run: python -m pytest -q tests
+      - name: Check publication boundary
+        run: python scripts/check_public.py

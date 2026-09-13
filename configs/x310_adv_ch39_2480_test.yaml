@@ -1,0 +1,37 @@
+experiment:
+  name: x310_adv_ch39
+  duration_s: 10
+  distance_experiment_enabled: false
+
+capture:
+  requested_sample_rate_sps: 20000000
+  expected_sample_rate_sps: 20000000
+  bandwidth_hz: 20000000
+  center_frequency_hz: 2480000000
+  gain_db: 37.5
+  antenna: RX2
+  channel: 0
+  usrp_args: type=x300,addr=192.168.40.2,master_clock_rate=200e6
+
+parser:
+  source_project_root: /path/to/BLE_encrypt_check
+  python: /path/to/PhantomChannel/.venv-cuda/bin/python
+  entrypoint: /path/to/BLE_encrypt_check/experiment/bt_40m_pfb_realtime.py
+  ble_threshold: 0.02
+  subband_sample_rate_sps: 4000000
+  chunk_samples: 16000000
+  overlap_samples: 200000
+  cpp_parser_threads: 4
+  cuda_device: 0
+
+phone:
+  device_name: PhantomAdv
+  address: D1:22:33:44:55:66
+  firmware_variant: phantomchannel_adv_broadcaster
+  covert_len_bytes: 230
+  notification_interval_ms: 20
+  rtt_available: false
+  bluez_central_used: false
+
+firmware:
+  build_dir: /path/to/PhantomChannel/artifacts/firmware/phantomchannel_adv_broadcaster

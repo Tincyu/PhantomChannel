@@ -103,8 +103,8 @@ index 00000000000..6ddf6cc29e3
 +	help
 +	  Covert payload bytes carried in the post-CRC advertising tail.
 +	  With the stack-wide legacy advertising data limit raised to 255,
-+	  the usable maximum is 241 bytes: 255 (LL payload) - 6 (AdvA) - 2
-+	  (AD length+type) - 2 (marker) - 6 (PC frame header).
++	  the usable maximum is 239 bytes: 255 (LL payload) - 6 (AdvA) - 2
++	  (AD length+type) - 2 (marker) - 6 (PC frame overhead).
 +
 +config PHANTOMCHANNEL_ADV_BENIGN
 +	bool "Build benign broadcaster without PhantomChannel frame"

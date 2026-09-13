@@ -1,0 +1,6 @@
+{
+  "repo": "/absolute/path/to/frozen/PhantomChannel",
+  "python": "/absolute/path/to/test-venv/bin/python",
+  "results": "/absolute/path/to/ae-results",
+  "expected_commit": "REPLACE_WITH_40_CHARACTER_GIT_COMMIT"
+}

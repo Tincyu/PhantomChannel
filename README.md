@@ -14,7 +14,8 @@ evaluation results are intentionally kept outside Git.
 | `tools/`, `native/` | Host-side analysis, build, capture, and parser code |
 | `vendor/BLE_encrypt_check/` | Author-owned receiver/parser source snapshot |
 | `configs/`, `config/local.env.example` | Example experiment settings and private-path template |
-| `tests/` | Offline regression tests (no SDR or board required) |
+| `tests/` | Offline regression and AE gateway tests (no SDR or board required) |
+| `ae/` | Versioned restricted SSH evaluation gateway and config template |
 | `scripts/`, `docs/` | Verification entry points and public setup/evaluation guidance |
 
 ## Offline test
@@ -27,7 +28,7 @@ python3 -m venv .venv
 .venv/bin/python -m pytest -q tests
 ```
 
-The expected current baseline is 150 passing offline tests. These tests do not
+The expected current baseline is 155 passing offline tests. These tests do not
 claim that a transmitter board was flashed or that a new RF capture passed.
 For optional CUDA parsing, install `requirements-cuda.txt` in a separate
 environment and run the checks in [setup](docs/setup.md).
@@ -39,9 +40,10 @@ and device identifiers for the target workstation. Review each YAML file before
 running any hardware command; example paths and identifiers are deliberately
 non-operational. See [setup](docs/setup.md) and [AE evaluation](docs/ae-evaluation.md).
 
-The AE SSH gateway and its machine-local state are deployed outside this Git
-repository. The public offline test command is the same command used by the
-gateway; hardware profiles require separate authorization and evidence.
+The AE SSH gateway source is in `ae/`; its machine-local config, keys and
+results are deployed outside this Git repository. The public offline test
+command is the same command used by the gateway; hardware profiles require
+separate authorization and evidence.
 
 ## Publication boundary
 

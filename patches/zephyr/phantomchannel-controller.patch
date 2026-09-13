@@ -7175,10 +7175,10 @@ index 8334f35ebf8..7977a8f7944 100644
 +/* PhantomChannel advertising covert-tail embedding (ported from the
 + * PhantomChannel_nRF_PoC Adv_embedd changes).
 + *
-+ * Restricted to BLE advertising channel 39: `chan` is the 1-based
-+ * find_lsb_set() result over the advertising channel map (1/2/3 for
-+ * advertising channels 37/38/39), so channel 39 is 3.  All other channels
-+ * transmit the unmodified advertising PDU.
++ * The marker and covert bytes are removed from the legal LL payload on all
++ * advertising channels.  In the default mode only channel 39 appends the
++ * software CRC and covert tail; CONFIG_PHANTOMCHANNEL_ADV_EMBED_EVERY is
++ * available for the stress mode that appends on every advertising channel.
 + *
 + * Returns true when the radio TX buffer was replaced with the covert packet.
 + */

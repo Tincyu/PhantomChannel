@@ -228,8 +228,21 @@ def decode_pip_row(
 
     real_payload = real_ext[2 : 2 + real_len]
     real_crc = real_ext[2 + real_len : 2 + real_len + 3]
-    covert = real_ext[2 + real_len + 3 :]
+
+    # The parser's dewhitened PDU contains the raw covert tail after the
+    # fixed PIP prefix.  The controller's second software-whitening pass
+    # stops at the real CRC; applying the real-phase whitening to the tail
+    # again would return a transformed value rather than the transmitted
+    # covert bytes.  Keep the inner real-header/payload/CRC decode above,
+    # but take the covert bytes directly from the parser PDU at the fixed
+    # fake-AA + fake-header + real-AA + real-header + real-CRC offset.
     expected_covert_len = fake_len - real_len - 9
+    covert_offset = 2 + 4 + 2 + real_len + 3
+    covert = pdu[covert_offset : covert_offset + max(expected_covert_len, 0)]
+    if len(covert) != max(expected_covert_len, 0):
+        # Preserve the old diagnostic behavior for truncated rows while
+        # making the source of the short tail explicit in the result.
+        covert = real_ext[2 + real_len + 3 :]
     result.update(
         {
             "real_payload_hex": real_payload.hex(),
@@ -237,6 +250,7 @@ def decode_pip_row(
             "covert_hex": covert.hex(),
             "covert_len": len(covert),
             "expected_covert_len": expected_covert_len,
+            "covert_source": "parser_dewhitened_pdu_fixed_pip_offset",
             "length_contract_ok": expected_covert_len == len(covert) and expected_covert_len >= 0,
         }
     )

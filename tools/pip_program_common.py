@@ -136,18 +136,28 @@ def flash_image(firmware: Path, serial_number: str, board_version: str) -> None:
     nrfutil = shutil.which("nrfutil")
     if nrfutil is None:
         raise RuntimeError("nrfutil is not in PATH")
+    jlink_dll = os.environ.get(
+        "PHANTOM_JLINK_DLL",
+        "/opt/embedded/toolchains/jlink/9.28/libjlinkarm.so",
+    )
+    command = [
+        nrfutil,
+        "device",
+        "program",
+        "--serial-number",
+        serial_number,
+        "--firmware",
+        str(firmware),
+        "--jlink-dll",
+        jlink_dll,
+        "--options",
+        "verify=VERIFY_READ,reset=RESET_DEFAULT",
+    ]
+    if not Path(jlink_dll).is_file():
+        raise RuntimeError(f"J-Link DLL not found: {jlink_dll}")
     subprocess.run(
-        [
-            nrfutil,
-            "device",
-            "program",
-            "--serial-number",
-            serial_number,
-            "--firmware",
-            str(firmware),
-            "--options",
-            "verify=VERIFY_READ,reset=RESET_DEFAULT",
-        ],
+        command,
         cwd=PROJECT_ROOT,
+        stdin=subprocess.DEVNULL,
         check=True,
     )

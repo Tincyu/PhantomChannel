@@ -173,6 +173,7 @@ def decode_pip_row(
     fake_raw: bytes,
     real_raw_from_mapping: bytes,
     crc_init: bytes | None = None,
+    contract: str = "nordic_legacy",
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "fake_aa_raw": aa_raw_hex(fake_raw),
@@ -229,20 +230,23 @@ def decode_pip_row(
     real_payload = real_ext[2 : 2 + real_len]
     real_crc = real_ext[2 + real_len : 2 + real_len + 3]
 
-    # The parser's dewhitened PDU contains the raw covert tail after the
-    # fixed PIP prefix.  The controller's second software-whitening pass
-    # stops at the real CRC; applying the real-phase whitening to the tail
-    # again would return a transformed value rather than the transmitted
-    # covert bytes.  Keep the inner real-header/payload/CRC decode above,
-    # but take the covert bytes directly from the parser PDU at the fixed
-    # fake-AA + fake-header + real-AA + real-header + real-CRC offset.
     expected_covert_len = fake_len - real_len - 9
     covert_offset = 2 + 4 + 2 + real_len + 3
-    covert = pdu[covert_offset : covert_offset + max(expected_covert_len, 0)]
-    if len(covert) != max(expected_covert_len, 0):
-        # Preserve the old diagnostic behavior for truncated rows while
-        # making the source of the short tail explicit in the result.
+    if contract == "da14695_sw_fake_header_only_no_hw":
+        # DA whitens H_f separately, software-whitens only the real region,
+        # and leaves covert raw.  The parser PDU therefore carries covert at
+        # the fixed fake-AA + fake-header + real-AA + real-header + CRC
+        # offset.
+        covert = pdu[covert_offset : covert_offset + max(expected_covert_len, 0)]
+        if len(covert) != max(expected_covert_len, 0):
+            covert = real_ext[2 + real_len + 3 :]
+        covert_source = "parser_dewhitened_pdu_fixed_pip_offset"
+    else:
+        # Nordic's legacy contract performs the additional whitening pass
+        # over the complete nested region, so the already reconstructed
+        # real_ext tail is the covert value.
         covert = real_ext[2 + real_len + 3 :]
+        covert_source = "reconstructed_real_extension_tail"
     result.update(
         {
             "real_payload_hex": real_payload.hex(),
@@ -250,7 +254,7 @@ def decode_pip_row(
             "covert_hex": covert.hex(),
             "covert_len": len(covert),
             "expected_covert_len": expected_covert_len,
-            "covert_source": "parser_dewhitened_pdu_fixed_pip_offset",
+            "covert_source": covert_source,
             "length_contract_ok": expected_covert_len == len(covert) and expected_covert_len >= 0,
         }
     )
@@ -267,7 +271,11 @@ def decode_pip_row(
     return result
 
 
-def audit(rows: list[dict[str, Any]], crc_init: bytes | None = None) -> dict[str, Any]:
+def audit(
+    rows: list[dict[str, Any]],
+    crc_init: bytes | None = None,
+    contract: str = "nordic_legacy",
+) -> dict[str, Any]:
     outputs: list[dict[str, Any]] = []
     real_counts: Counter[str] = Counter()
     status_counts: Counter[str] = Counter()
@@ -282,7 +290,7 @@ def audit(rows: list[dict[str, Any]], crc_init: bytes | None = None) -> dict[str
             output["deep_search"] = {"found": False, "hits": []}
         else:
             real_raw = inverse_map_fake_access_address(fake_raw)
-            output = decode_pip_row(row, fake_raw, real_raw, crc_init)
+            output = decode_pip_row(row, fake_raw, real_raw, crc_init, contract)
             output["row_index"] = index
             real_counts[aa_raw_hex(real_raw)] += 1
         status_counts[output["decode_status"]] += 1
@@ -290,6 +298,7 @@ def audit(rows: list[dict[str, Any]], crc_init: bytes | None = None) -> dict[str
 
     return {
         "mode": "pip_x310_fake_to_real_without_cross_layer_match",
+        "contract": contract,
         "rows": len(rows),
         "status_counts": dict(status_counts),
         "inferred_real_aa_raw_counts": dict(real_counts),
@@ -305,6 +314,12 @@ def main() -> int:
         "--crc-init",
         help="optional connection CRCInit in raw/controller byte order, e.g. 555555",
     )
+    parser.add_argument(
+        "--contract",
+        choices=("nordic_legacy", "da14695_sw_fake_header_only_no_hw"),
+        default="nordic_legacy",
+        help="PIP whitening/covert placement contract (default: nordic_legacy)",
+    )
     args = parser.parse_args()
 
     with args.csv.open(newline="", encoding="utf-8") as handle:
@@ -312,7 +327,7 @@ def main() -> int:
     crc_init = parse_hex_bytes(args.crc_init) if args.crc_init else None
     if crc_init is not None and len(crc_init) != 3:
         parser.error("--crc-init must contain exactly three bytes")
-    report = audit(rows, crc_init)
+    report = audit(rows, crc_init, args.contract)
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)

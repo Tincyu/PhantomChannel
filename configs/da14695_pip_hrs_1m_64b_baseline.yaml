@@ -22,6 +22,7 @@ link:
   fixed_random_address: "C0:DE:52:84:00:41"
 
 central:
+  board: nrf52840dk/nrf52840
   request_phy: 1M
   auto_phy_update: false
   rx_debug: true

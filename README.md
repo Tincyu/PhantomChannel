@@ -49,7 +49,9 @@ separate authorization and evidence.
 
 This checkout contains source and small configuration files only. Do not commit
 SDK copies, `.venv*`, `config/local.env`, raw IQ, board serials, logs, generated
-firmware, or AE credentials. Run `scripts/check_public.py` before each push.
+firmware, or AE credentials. Follow the [safe publishing guide](docs/publishing.md),
+run `scripts/check_public.py`, and check unpushed history with
+`scripts/check_push_size.py --base origin/main` before each push.
 
 The project-owned host source is released under the [MIT license](LICENSE).
 Some firmware files retain their own license headers; see

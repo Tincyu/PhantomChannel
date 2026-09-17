@@ -20,6 +20,8 @@ TEXT_EXTENSIONS = {
 }
 FORBIDDEN_SUFFIXES = {".bin", ".elf", ".gz", ".hex", ".iq", ".key", ".p12", ".pem", ".sc16", ".so", ".tar", ".tgz", ".zip"}
 MAX_FILE_BYTES = 8 * 1024 * 1024
+MAX_TOTAL_BYTES = 64 * 1024 * 1024
+MAX_GIT_VISIBLE_FILES = 5_000
 PRIVATE_PATH = re.compile(r"/(?:home/|srv/embedded-lab/|media/|opt/uhd-)")
 DEVICE_ID = re.compile(r"\b(?:001050[0-9]{6}|U[0-9]{6})\b")
 SECRET = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bAKIA[0-9A-Z]{16}\b")
@@ -35,13 +37,18 @@ def git_paths() -> list[Path]:
 
 def check() -> list[str]:
     problems: list[str] = []
-    for path in git_paths():
+    paths = git_paths()
+    total_bytes = 0
+    regular_files = 0
+    for path in paths:
         rel = path.relative_to(ROOT)
         if path.is_symlink():
             problems.append(f"{rel}: symlink requires manual review")
             continue
         if not path.is_file():
             continue
+        regular_files += 1
+        total_bytes += path.stat().st_size
         if rel.name == "local.env" or path.suffix.lower() in FORBIDDEN_SUFFIXES:
             problems.append(f"{rel}: private/generated file type")
         if path.stat().st_size > MAX_FILE_BYTES:
@@ -69,6 +76,14 @@ def check() -> list[str]:
                 continue
             if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
                 problems.append(f"vendor manifest hash mismatch: {filename}")
+    if regular_files > MAX_GIT_VISIBLE_FILES:
+        problems.append(
+            f"Git-visible file count {regular_files} exceeds {MAX_GIT_VISIBLE_FILES}"
+        )
+    if total_bytes > MAX_TOTAL_BYTES:
+        problems.append(
+            f"Git-visible content {total_bytes} bytes exceeds {MAX_TOTAL_BYTES} bytes"
+        )
     return problems
 
 
@@ -79,7 +94,12 @@ def main() -> int:
         for problem in problems:
             print(f"- {problem}")
         return 1
-    print(f"Publication preflight passed ({len(git_paths())} Git-visible files).")
+    paths = git_paths()
+    total_bytes = sum(path.stat().st_size for path in paths if path.is_file())
+    print(
+        "Publication preflight passed "
+        f"({len(paths)} Git-visible files, {total_bytes} bytes)."
+    )
     print("Manual license, history, and dependency review is still required.")
     return 0
 

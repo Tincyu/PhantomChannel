@@ -1,59 +1,67 @@
 # PhantomChannel
 
-PhantomChannel is the source repository for the transmitter experiments, the
-project-owned BLE receiver/parser, and reproducible offline analyses. The
-receiver is a first-class part of this project rather than a renamed copy of
-an older project. SDKs, toolchains, captures, device-specific
-configuration, and evaluation results are intentionally kept outside Git.
+PhantomChannel is an open-source research prototype for transmitting and
+recovering an auxiliary frame alongside Bluetooth Low Energy traffic. The
+transmitter places project data after the normal BLE CRC, while an ordinary
+BLE connection continues to carry the application notification. The receiver
+captures the radio signal and recovers the additional frame with the supplied
+DSP and parser pipeline.
 
-## Layout
+This repository contains the PhantomChannel source needed to inspect the
+design, run the offline regression suite, and reproduce the Nordic transmitter
+and host-side receiver setup. Large vendor SDKs, toolchains and raw IQ captures
+are kept outside Git.
 
-| Path | Purpose |
-|---|---|
-| `firmware/`, `patches/` | Transmitter sample and the focused Zephyr controller patch; external SDKs are not vendored |
-| `tools/`, `native/` | Host-side analysis, build, capture, and parser code |
-| `receiver/` | Project-owned BLE receiver, DSP pipeline and native parser source |
-| `configs/`, `config/local.env.example` | Example experiment settings and private-path template |
-| `tests/` | Offline regression and AE gateway tests (no SDR or board required) |
-| `ae/` | Versioned restricted SSH evaluation gateway and config template |
-| `scripts/`, `docs/` | Verification entry points and public setup/evaluation guidance |
+## Repository contents
 
-## Offline test
+- `firmware/` contains the nRF52840 peripheral application.
+- `patches/zephyr/` contains the focused controller patch and its exact base
+  revision.
+- `receiver/` contains the receiver, DSP pipeline and packet parser.
+- `tools/` and `configs/` contain experiment and analysis entry points.
+- `tests/` contains hardware-independent regression tests.
+- `ae/` contains the restricted SSH entry point for artifact evaluation.
 
-Use Python 3.12. On a fresh clone:
+## Quick start
+
+The offline suite is the simplest way to check a fresh clone. It does not
+require an SDR, development board, CUDA or a vendor SDK.
 
 ```bash
+git clone https://github.com/Tincyu/PhantomChannel.git
+cd PhantomChannel
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-test.txt
-.venv/bin/python -m pytest -q tests
+.venv/bin/python -m pytest -q
 ```
 
-The expected current baseline is 155 passing offline tests. These tests do not
-claim that a transmitter board was flashed or that a new RF capture passed.
-For optional CUDA parsing, install `requirements-cuda.txt` in a separate
-environment and run the checks in [setup](docs/setup.md).
+The current baseline is 155 passing tests on Python 3.12.
 
-## Hardware and evaluation
+## Hardware reproduction
 
-Copy `config/local.env.example` to the ignored `config/local.env` and set paths
-and device identifiers for the target workstation. Review each YAML file before
-running any hardware command; example paths and identifiers are deliberately
-non-operational. See [setup](docs/setup.md) and [AE evaluation](docs/ae-evaluation.md).
+The reference transmitter uses an nRF52840 DK. Apply the patch in
+`patches/zephyr/` to the documented Zephyr revision, then build the application
+in `firmware/nrf52840dk/phantomchannel_peripheral/`. The complete Nordic SDK is
+not included.
 
-The AE SSH gateway source is in `ae/`; its machine-local config, keys and
-results are deployed outside this Git repository. The public offline test
-command is the same command used by the gateway; hardware profiles require
-separate authorization and evidence.
+Receiver and experiment paths are configured locally. Copy the example file
+before running hardware commands:
 
-## Publication boundary
+```bash
+cp config/local.env.example config/local.env
+```
 
-This checkout contains source and small configuration files only. Do not commit
-SDK copies, `.venv*`, `config/local.env`, raw IQ, board serials, logs, generated
-firmware, or AE credentials. Follow the [safe publishing guide](docs/publishing.md),
-run `scripts/check_public.py`, and check unpushed history with
-`scripts/check_push_size.py --base origin/main` before each push.
+Edit the copied file for the workstation and review the selected YAML profile
+under `configs/`. Setup notes are in [docs/setup.md](docs/setup.md); the AE
+workflow is described in [docs/ae-evaluation.md](docs/ae-evaluation.md).
 
-The project-owned host source is released under the [MIT license](LICENSE).
-Some firmware files retain their own license headers; see
-[third-party notes](docs/third-party.md) for those exceptions, external
-dependencies and source boundaries.
+## Source and generated data
+
+The repository tracks project source, focused SDK patches, tests and small
+configuration files. Build output, SDK copies, raw captures, device serials,
+credentials and evaluation results must remain outside Git. See
+[docs/publishing.md](docs/publishing.md) before publishing changes.
+
+PhantomChannel host-side source is released under the [MIT License](LICENSE).
+Firmware files with separate license headers and external dependencies are
+listed in [docs/third-party.md](docs/third-party.md).

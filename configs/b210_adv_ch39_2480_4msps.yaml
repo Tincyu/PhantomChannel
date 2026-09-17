@@ -14,9 +14,9 @@ capture:
   usrp_args: type=b200,serial=B210_SERIAL
 
 parser:
-  source_project_root: /path/to/BLE_encrypt_check
+  source_project_root: /path/to/PhantomChannel/receiver
   python: /path/to/PhantomChannel/.venv-cuda/bin/python
-  entrypoint: /path/to/BLE_encrypt_check/experiment/bt_40m_pfb_realtime.py
+  entrypoint: /path/to/PhantomChannel/receiver/experiment/bt_40m_pfb_realtime.py
   ble_threshold: 0.02
   subband_sample_rate_sps: 4000000
   chunk_samples: 16000000

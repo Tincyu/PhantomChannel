@@ -24,7 +24,7 @@ capture:
   # This existing framed worker provides UHD RX-time tags required by the
   # RTT/S‌DR matcher. Its frontend bandwidth is reported by UHD separately;
   # the parser analysis bandwidth below is explicitly 80 MHz.
-  capture_bin: /path/to/BLE_encrypt_check/build-local/uhd_b210_capture_framed_udp
+  capture_bin: /path/to/PhantomChannel/receiver/build-local/uhd_b210_capture_framed_udp
   uhd_library_path: /path/to/uhd-4.6.0.0/lib
   center_frequency_hz: 2440000000
   sample_rate_sps: 80000000
@@ -85,8 +85,8 @@ rtt:
 
 parser:
   enabled: true
-  source_project_root: /path/to/BLE_encrypt_check
-  python: /path/to/BLE_encrypt_check/.venv-cuda/bin/python
+  source_project_root: /path/to/PhantomChannel/receiver
+  python: /path/to/PhantomChannel/receiver/.venv-cuda/bin/python
   entrypoint: experiment/bt_40m_pfb_realtime.py
   iq_format: int16
   processing_bandwidth_policy: analysis

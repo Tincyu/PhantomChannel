@@ -5,7 +5,7 @@ This runner is intentionally separate from run_range_bandwidth_experiment.py.
 It uses UHD's rx_samples_to_file example so that the X310 analog bandwidth is
 set explicitly, records the actual rate selected by UHD, preserves the UHD
 log, and can replay the resulting SC16 file through the bundled
-BLE_encrypt_check-compatible parser.
+PhantomChannel receiver-compatible parser.
 
 The default test captures 10 seconds at 2440 MHz with a requested 80 MS/s
 sample rate and 80 MHz bandwidth on RX2/channel 0. The X310 currently selects
@@ -41,7 +41,8 @@ DEFAULT_UHD_LIBRARY = UHD_LIBRARY
 DEFAULT_BLE_ROOT = BLE_ROOT
 # The X310 orchestrator and local CUDA physical-length backend use the
 # PhantomChannel environment.  The parser defaults to the bundled read-only
-# snapshot and can be overridden with PHANTOM_BLE_ROOT.
+# source tree and can be overridden with PHANTOM_RECEIVER_ROOT. The legacy
+# PHANTOM_BLE_ROOT name remains accepted for compatibility.
 DEFAULT_PARSER_PYTHON = PARSER_PYTHON
 DEFAULT_PARSER_ENTRYPOINT = DEFAULT_BLE_ROOT / "experiment/bt_40m_pfb_realtime.py"
 DEFAULT_TWO_STAGE_SCRIPT = PROJECT_ROOT / "tools/two_stage_known_aa_parse.py"
@@ -633,7 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reserve-bytes", type=int, default=512 * 1024 * 1024)
     parser.add_argument("--nvme-root", type=Path, default=DEFAULT_NVME_ROOT)
     parser.add_argument("--pssd-root", type=Path, default=DEFAULT_PSSD_ROOT)
-    parser.add_argument("--with-sdr-parse", action="store_true", help="Replay each completed capture through BLE_encrypt_check.")
+    parser.add_argument("--with-sdr-parse", action="store_true", help="Replay each completed capture through PhantomChannel receiver.")
     parser.add_argument(
         "--two-stage-known-aa",
         action="store_true",

@@ -20,7 +20,7 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-BLE_ROOT = Path("/path/to/BLE_encrypt_check")
+BLE_ROOT = Path("/path/to/PhantomChannel/receiver")
 SCORER = PROJECT_ROOT / "tools" / "score_iq_parser_candidates.py"
 
 

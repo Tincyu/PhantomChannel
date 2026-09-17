@@ -63,19 +63,19 @@ def check() -> list[str]:
         for label, pattern in (("machine path", PRIVATE_PATH), ("device identifier", DEVICE_ID), ("secret-like token", SECRET)):
             if pattern.search(data):
                 problems.append(f"{rel}: {label}")
-    manifest_root = ROOT / "vendor" / "BLE_encrypt_check"
+    manifest_root = ROOT / "receiver"
     manifest = manifest_root / "SOURCE_MANIFEST.sha256"
     if not manifest.is_file():
-        problems.append("vendor/BLE_encrypt_check: source manifest missing")
+        problems.append("receiver: source manifest missing")
     else:
         for line in manifest.read_text(encoding="utf-8").splitlines():
             digest, _, filename = line.partition("  ")
             source = manifest_root / filename
             if not re.fullmatch(r"[0-9a-f]{64}", digest) or not filename or not source.is_file():
-                problems.append(f"vendor manifest entry invalid: {filename}")
+                problems.append(f"receiver manifest entry invalid: {filename}")
                 continue
             if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
-                problems.append(f"vendor manifest hash mismatch: {filename}")
+                problems.append(f"receiver manifest hash mismatch: {filename}")
     if regular_files > MAX_GIT_VISIBLE_FILES:
         problems.append(
             f"Git-visible file count {regular_files} exceeds {MAX_GIT_VISIBLE_FILES}"

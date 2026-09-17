@@ -1205,7 +1205,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override IQ duration, or the post-notification IQ window in stop-after-notification mode.",
     )
-    parser.add_argument("--with-sdr-parse", action="store_true", help="Run BLE_encrypt_check SDR parser after B210 capture.")
+    parser.add_argument("--with-sdr-parse", action="store_true", help="Run PhantomChannel receiver SDR parser after B210 capture.")
     parser.add_argument("--no-sdr-parse", action="store_true", help="Disable SDR parser even if config enables it.")
     parser.add_argument("--sdr-max-chunks", type=int, default=0, help="Limit parser chunks for diagnostics; 0 parses full IQ.")
     parser.add_argument("--dry-run", action="store_true", help="Create metadata only; do not touch hardware.")

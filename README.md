@@ -1,10 +1,10 @@
 # PhantomChannel
 
-PhantomChannel is the source repository for the transmitter experiments, BLE
-receiver/parser, and reproducible offline analyses. The repository is based on
-the original PhantomChannel and `BLE_encrypt_check` projects, both owned by the
-project author. SDKs, toolchains, captures, device-specific configuration, and
-evaluation results are intentionally kept outside Git.
+PhantomChannel is the source repository for the transmitter experiments, the
+project-owned BLE receiver/parser, and reproducible offline analyses. The
+receiver is a first-class part of this project rather than a renamed copy of
+an older project. SDKs, toolchains, captures, device-specific
+configuration, and evaluation results are intentionally kept outside Git.
 
 ## Layout
 
@@ -12,7 +12,7 @@ evaluation results are intentionally kept outside Git.
 |---|---|
 | `firmware/`, `patches/` | Transmitter sample and the focused Zephyr controller patch; external SDKs are not vendored |
 | `tools/`, `native/` | Host-side analysis, build, capture, and parser code |
-| `vendor/BLE_encrypt_check/` | Author-owned receiver/parser source snapshot |
+| `receiver/` | Project-owned BLE receiver, DSP pipeline and native parser source |
 | `configs/`, `config/local.env.example` | Example experiment settings and private-path template |
 | `tests/` | Offline regression and AE gateway tests (no SDR or board required) |
 | `ae/` | Versioned restricted SSH evaluation gateway and config template |
@@ -56,4 +56,4 @@ run `scripts/check_public.py`, and check unpushed history with
 The project-owned host source is released under the [MIT license](LICENSE).
 Some firmware files retain their own license headers; see
 [third-party notes](docs/third-party.md) for those exceptions, external
-dependencies and the author-owned `BLE_encrypt_check` snapshot.
+dependencies and source boundaries.

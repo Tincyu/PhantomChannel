@@ -2,7 +2,7 @@
 """Run the opt-in two-stage known-BLE-access-address parser.
 
 The implementation lives in PhantomChannel and deliberately treats
-BLE_encrypt_check as an external parser dependency.  It feeds two IQ windows
+PhantomChannel receiver as an external parser dependency.  It feeds two IQ windows
 through the parser's existing stdin interface:
 
 * the first window uses the normal blind parser and bootstraps tolerant AA
@@ -11,7 +11,7 @@ through the parser's existing stdin interface:
   ``--known-ble-aa``; the local C++ backend parses native candidates and the
   PhantomChannel remapping stage applies the same AA/Hamming filter.
 
-No files in the BLE_encrypt_check project are modified.  Stage-2 rows are
+No files in the bundled PhantomChannel receiver are modified. Stage-2 rows are
 sample-offset back to the original IQ stream before they are merged.
 """
 
@@ -50,16 +50,16 @@ from tools.phantom_postprocess_scorer import (  # noqa: E402
 
 DEFAULT_BLE_ROOT = BLE_ROOT
 # This is a PhantomChannel-local facade.  It compiles the read-only native
-# signal source from BLE_encrypt_check and adds Phantom frame fields without
+# signal source from PhantomChannel receiver and adds Phantom frame fields without
 # changing that project's source tree or build directory.
 DEFAULT_NATIVE_BACKEND_DIR = PROJECT_ROOT / "artifacts/native/phantom_bt_native"
 # Keep the optional PhantomChannel CUDA post-processing in this project's own
-# environment.  The parser source/entrypoint still comes from BLE_encrypt_check.
+# environment.  The parser source/entrypoint still comes from PhantomChannel receiver.
 DEFAULT_PARSER_PYTHON = PARSER_PYTHON
 DEFAULT_PARSER_ENTRYPOINT = DEFAULT_BLE_ROOT / "experiment/bt_40m_pfb_realtime.py"
 
 # The first spelling is the BLE specification value.  The second is the
-# little-endian byte order emitted by the current BLE_encrypt_check parser.
+# little-endian byte order emitted by the current PhantomChannel receiver parser.
 DEFAULT_ADVERTISING_ACCESS_ADDRESSES = ("8E89BED6", "D6BE898E")
 DEFAULT_CHUNK_SAMPLES = 16_000_000
 DEFAULT_OVERLAP_SAMPLES = 200_000
@@ -468,7 +468,7 @@ def build_parser_command(
         command.append("--use-cuda")
     else:
         command.append("--no-use-cuda")
-    # The unmodified BLE_encrypt_check native wrapper rejects known-AA
+    # The unmodified PhantomChannel receiver native wrapper rejects known-AA
     # arguments.  For the local C++ stage we therefore parse with its native
     # candidate decoder and apply the known-AA filter in PhantomChannel during
     # remapping.  The Python backend continues to receive the fast-path list.
@@ -976,7 +976,7 @@ def _measure_physical_lengths_cuda(rows: list[dict[str, Any]], args: argparse.Na
     local PhantomChannel scorer—per-channel frequency shift, 129-tap FIR,
     power and moving-average smoothing—but processes a batch of equal-sized
     windows on the GPU.  The raw SC16 read and final scalar decisions remain on
-    the host.  The external BLE_encrypt_check CUDA channelizer is intentionally
+    the host. The bundled PhantomChannel receiver CUDA channelizer is intentionally
     not imported or modified here.
     """
 
@@ -1207,7 +1207,7 @@ def build_summary(
     return {
         "schema_version": 1,
         "mode": "two_stage_known_access_address",
-        "ble_encrypt_check_modified": False,
+        "receiver_modified": False,
         "frontend_backend_requested": args.frontend_backend,
         "frontend_backend_used": getattr(args, "_frontend_backend_used", "unknown"),
         "frontend_backend_diagnostic": getattr(args, "_frontend_backend_diagnostic", ""),
@@ -1461,7 +1461,7 @@ def run(args: argparse.Namespace) -> int:
     if frontend_backend == "cpu":
         # The external native parser intentionally requires CUDA threshold
         # segments.  Keep the fallback explicit and local to PhantomChannel;
-        # the BLE_encrypt_check project remains untouched.
+        # the bundled PhantomChannel receiver remains untouched.
         args.stage1_ble_parser_backend = "python"
         args.stage2_ble_parser_backend = "python"
     if args.stage2_ble_parser_backend == "cpp" and not any(
@@ -1656,7 +1656,7 @@ def run(args: argparse.Namespace) -> int:
         {
             "schema_version": 1,
             "command": [str(path) for path in sys.argv],
-            "ble_encrypt_check_modified": False,
+            "receiver_modified": False,
             "stage1_output": str(stage1_dir),
             "stage2_output": str(stage2_dir),
             "merged_ble_packets": str(args.output_dir / "ble_packets.csv"),

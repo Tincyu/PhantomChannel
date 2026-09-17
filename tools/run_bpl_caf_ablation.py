@@ -4,7 +4,7 @@
 The physical-burst denominator is produced locally from wideband IQ power.  No
 parser CSV, RTT row, payload pattern, CRC result, or post-hoc reference is read
 until after the four modes have generated their candidate rows.  The external
-BLE_encrypt_check project is used only as a read-only dependency snapshot; it
+The PhantomChannel receiver source is treated as a read-only input; it
 is never imported or invoked by this harness.
 """
 
@@ -155,7 +155,7 @@ def git_snapshot(root: Path) -> dict[str, Any]:
 def guard_snapshot() -> dict[str, Any]:
     return {
         "phantomchannel": git_snapshot(PROJECT_ROOT),
-        "ble_encrypt_check": {
+        "receiver": {
             **git_snapshot(BLE_ROOT),
             "entrypoint": str(BLE_ENTRYPOINT),
             "entrypoint_sha256": sha256_file(BLE_ENTRYPOINT) if BLE_ENTRYPOINT.exists() else None,
@@ -164,7 +164,7 @@ def guard_snapshot() -> dict[str, Any]:
 
 
 def guard_unchanged(before: dict[str, Any], after: dict[str, Any]) -> bool:
-    return before.get("ble_encrypt_check") == after.get("ble_encrypt_check")
+    return before.get("receiver") == after.get("receiver")
 
 
 def load_source_metadata(run: dict[str, Any]) -> tuple[Path, dict[str, Any], Path]:
@@ -800,7 +800,7 @@ def main() -> int:
     output = args.output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
     before_guard = guard_snapshot()
-    write_json(output / "ble_encrypt_check_guard.json", {"before": before_guard})
+    write_json(output / "receiver_guard.json", {"before": before_guard})
     inventory = build_inventory(config, hash_sources=not args.no_source_hash and args.reuse_inventory is None)
     source_hashes_reused = False
     if args.reuse_inventory is not None:
@@ -895,9 +895,9 @@ def main() -> int:
         "unchanged": guard_unchanged(before_guard, after_guard),
         "status": "PASS" if guard_unchanged(before_guard, after_guard) else "FAIL_EXTERNAL_DEPENDENCY_CHANGED",
     }
-    write_json(output / "ble_encrypt_check_guard.json", guard_result)
+    write_json(output / "receiver_guard.json", guard_result)
     if not guard_result["unchanged"]:
-        raise RuntimeError("BLE_encrypt_check read-only guard changed during experiment")
+        raise RuntimeError("PhantomChannel receiver read-only guard changed during experiment")
     write_json(output / "run_status.json", {
         "status": "completed",
         "window_set": args.window_set,

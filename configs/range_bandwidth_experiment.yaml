@@ -26,7 +26,7 @@ environments:
 capture:
   enabled: false
   sdr_model: B210
-  capture_bin: /path/to/BLE_encrypt_check/build-local/uhd_b210_capture_framed_udp
+  capture_bin: /path/to/PhantomChannel/receiver/build-local/uhd_b210_capture_framed_udp
   uhd_library_path: /path/to/uhd-4.6.0.0/lib
   center_frequency_hz: 2420000000
   sample_rate_sps: 40000000
@@ -76,8 +76,8 @@ rtt:
 
 parser:
   enabled: false
-  source_project_root: /path/to/BLE_encrypt_check
-  python: /path/to/BLE_encrypt_check/.venv-cuda/bin/python
+  source_project_root: /path/to/PhantomChannel/receiver
+  python: /path/to/PhantomChannel/receiver/.venv-cuda/bin/python
   entrypoint: experiment/bt_40m_pfb_realtime.py
   iq_format: int16
   processing_bandwidth_policy: analysis

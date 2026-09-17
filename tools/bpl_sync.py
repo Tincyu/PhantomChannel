@@ -2,12 +2,12 @@
 """Independent BLE preamble-localization primitives.
 
 This module is intentionally local to PhantomChannel.  It does not import the
-BLE_encrypt_check parser and it never consults payload, CRC, RTT, or an
+PhantomChannel receiver parser and it never consults payload, CRC, RTT, or an
 existing parser row while choosing a correlation peak.
 
 Provenance: independent local reconstruction for the 2026-08-09 experiment;
 no external parser source is imported or monkey-patched.  The protected
-BLE_encrypt_check dependency was recorded at Git HEAD
+PhantomChannel receiver dependency was recorded at Git HEAD
 b973d3c75e38fa3d3f8292424126e83bf31e8065 during the experiment.
 
 The implementation is a compact reference BPL path for the offline ablation:

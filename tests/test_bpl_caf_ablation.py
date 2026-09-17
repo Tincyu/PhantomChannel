@@ -180,8 +180,8 @@ def test_posthoc_exact_does_not_promote_non_caf_stage(tmp_path: Path) -> None:
 
 
 def test_ble_guard_compares_external_state_only() -> None:
-    before = {"ble_encrypt_check": {"head": "a", "status": [" D file"]}}
-    after = {"ble_encrypt_check": {"head": "a", "status": [" D file"]}}
-    changed = {"ble_encrypt_check": {"head": "b", "status": [" D file"]}}
+    before = {"receiver": {"head": "a", "status": [" D file"]}}
+    after = {"receiver": {"head": "a", "status": [" D file"]}}
+    changed = {"receiver": {"head": "b", "status": [" D file"]}}
     assert guard_unchanged(before, after)
     assert not guard_unchanged(before, changed)

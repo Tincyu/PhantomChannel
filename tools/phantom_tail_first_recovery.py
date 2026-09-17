@@ -8,7 +8,7 @@ loaded only for the separate audit output; they never select a demodulation
 hypothesis.
 
 The current implementation is intentionally opt-in and does not replace the
-existing scorer or modify BLE_encrypt_check.
+existing scorer or modify PhantomChannel receiver.
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ _CUDA_DSP = None
 
 
 def load_cuda_dsp() -> dict[str, Any]:
-    """Load the CUDA DSP helpers without changing BLE_encrypt_check."""
+    """Load the CUDA DSP helpers without changing PhantomChannel receiver."""
     global _CUDA_DSP
     if _CUDA_DSP is not None:
         return _CUDA_DSP
-    ble_root = Path("/path/to/BLE_encrypt_check")
+    ble_root = Path("/path/to/PhantomChannel/receiver")
     experiment_root = ble_root / "experiment"
     if str(experiment_root) not in sys.path:
         sys.path.insert(0, str(experiment_root))
@@ -1386,7 +1386,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
         "cuda_status": cuda_status,
         "input_files": input_files,
-        "ble_encrypt_check_guard": {
+        "receiver_guard": {
             "before": before_guard,
             "after": after_guard,
             "unchanged": before_guard == after_guard,
@@ -1402,14 +1402,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
     }
     write_json(output_dir / "manifest.json", manifest)
-    write_json(output_dir / "ble_encrypt_check_guard.json", manifest["ble_encrypt_check_guard"])
+    write_json(output_dir / "receiver_guard.json", manifest["receiver_guard"])
     write_json(output_dir / "validation_report.json", {
         "analysis_id": "phase2_tail_first_v1",
         "diagnostic_only": True,
         "funnel_window_count": len(selected_indices),
         "burst_count": len(bursts),
         "funnel_closure_available": False,
-        "ble_encrypt_check_unchanged": before_guard == after_guard,
+        "receiver_unchanged": before_guard == after_guard,
         "frozen_main_result_untouched": True,
         "notes": [
             "This first tail-first pass is a diagnostic inventory and is not a blind end-to-end rate result.",
@@ -1423,7 +1423,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "burst_count": len(bursts),
         "decoded_candidates": len(decoded_rows),
         "ablation": ablation,
-        "ble_encrypt_check_unchanged": before_guard == after_guard,
+        "receiver_unchanged": before_guard == after_guard,
         "elapsed_s": time.monotonic() - started,
     }
 

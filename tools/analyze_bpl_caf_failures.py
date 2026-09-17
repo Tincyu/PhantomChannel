@@ -437,7 +437,7 @@ def report_markdown(
         "",
         "## Scope and guard",
         "",
-        f"- BLE_encrypt_check read-only guard: `{summary.get('guard_status')}`",
+        f"- PhantomChannel receiver read-only guard: `{summary.get('guard_status')}`",
         f"- Funnel rows: `{summary.get('funnel_rows')}`; aggregate metric rows: `{summary.get('metric_rows')}`",
         f"- Funnel violations: `{summary.get('funnel_violations')}`; non-applicable gate rows: `{summary.get('funnel_na_rows')}`",
         "- Phase-derived timing is disabled; BPL uses discrete correlation peak plus parabolic interpolation.",
@@ -554,7 +554,7 @@ def main() -> int:
     bpl_summary = summarize_bpl_candidates(bpl_rows)
     perturbation_summary = summarize_start_perturbation(candidate_rows)
     window_manifest = build_window_manifest(input_dir)
-    guard = json.loads((input_dir / "ble_encrypt_check_guard.json").read_text(encoding="utf-8"))
+    guard = json.loads((input_dir / "receiver_guard.json").read_text(encoding="utf-8"))
     summary = {
         "schema_version": 1,
         "input_dir": str(input_dir),
@@ -615,7 +615,7 @@ def main() -> int:
         encoding="utf-8",
     )
     if not guard.get("unchanged", False):
-        raise RuntimeError("BLE_encrypt_check guard failed; analysis is invalid")
+        raise RuntimeError("PhantomChannel receiver guard failed; analysis is invalid")
     print(json.dumps({"status": "completed", **summary}, ensure_ascii=False))
     return 0
 

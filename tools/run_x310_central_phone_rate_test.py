@@ -5,7 +5,7 @@ The phone must advertise the PhantomSink GATT service before the flashed
 nRF52840 central starts. IQ is captured to local NVMe, parsed with the CUDA/C++
 BLE pipeline, scored without RTT ground truth, copied and verified on PSSD, and
 then the validated NVMe IQ file is removed. The existing phone HRS runner and
-the BLE_encrypt_check project are left untouched.
+the bundled PhantomChannel receiver are left untouched.
 """
 
 from __future__ import annotations

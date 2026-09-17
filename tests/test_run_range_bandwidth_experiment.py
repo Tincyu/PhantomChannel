@@ -276,7 +276,7 @@ class RunRangeBandwidthExperimentTest(unittest.TestCase):
     def test_build_sdr_parser_command_uses_capture_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            ble_root = root / "BLE_encrypt_check"
+            ble_root = root / "receiver"
             entrypoint = ble_root / "experiment" / "bt_40m_pfb_realtime.py"
             python = ble_root / ".venv-cuda" / "bin" / "python"
             entrypoint.parent.mkdir(parents=True)
@@ -333,7 +333,7 @@ class RunRangeBandwidthExperimentTest(unittest.TestCase):
     def test_build_sdr_parser_command_can_keep_fixed_processing_bandwidth(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            ble_root = root / "BLE_encrypt_check"
+            ble_root = root / "receiver"
             entrypoint = ble_root / "experiment" / "bt_40m_pfb_realtime.py"
             python = ble_root / ".venv-cuda" / "bin" / "python"
             entrypoint.parent.mkdir(parents=True)

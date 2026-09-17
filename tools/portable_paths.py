@@ -34,10 +34,13 @@ def project_path(value: str | os.PathLike[str], *, base: Path = PROJECT_ROOT) ->
     return path.resolve()
 
 
-BLE_ROOT = _env_path(
-    ("PHANTOM_BLE_ROOT",),
-    PROJECT_ROOT / "vendor" / "BLE_encrypt_check",
+RECEIVER_ROOT = _env_path(
+    ("PHANTOM_RECEIVER_ROOT", "PHANTOM_BLE_ROOT"),
+    PROJECT_ROOT / "receiver",
 )
+# Compatibility alias for existing tools and command lines. New integrations
+# should prefer PHANTOM_RECEIVER_ROOT and RECEIVER_ROOT.
+BLE_ROOT = RECEIVER_ROOT
 PARSER_PYTHON = _env_path(
     ("PHANTOM_PARSER_PYTHON",),
     PROJECT_ROOT / ".venv-cuda" / "bin" / "python",

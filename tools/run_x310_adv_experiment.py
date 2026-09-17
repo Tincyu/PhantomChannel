@@ -3,7 +3,7 @@
 
 No phone is required.  The flow is the same as the phone HRS one-click runner:
 capture 10 s of IQ to local NVMe, copy a clean capture to PSSD, replay it
-through the read-only BLE_encrypt_check one-stage parser, score Phantom
+through the read-only PhantomChannel receiver one-stage parser, score Phantom
 PC-frame candidates, and print the metric table at the tail:
 
     指标	结果
@@ -14,7 +14,7 @@ PC-frame candidates, and print the metric table at the tail:
     byte recovery	95.6%
     G_e2e	95.8 kbps（payload 93.5 kbps）
 
-The B210 path uses BLE_encrypt_check's framed UHD capture binary (the
+The B210 path uses PhantomChannel receiver's framed UHD capture binary (the
 rx_samples_to_file example cannot set RX gain on B200-family devices).  The
 X310 path is selected automatically when the configured ``usrp_args`` do not
 name a B200/B210 device.
@@ -38,7 +38,7 @@ DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "x310_adv_ch39_2480_b210_20mhz.yaml"
 DEFAULT_NVME_ROOT = PROJECT_ROOT / "testdata"
 DEFAULT_PSSD_ROOT = Path("/path/to/PhantomChannel/testdata")
 B210_CAPTURE_BIN = Path(
-    "/path/to/BLE_encrypt_check/build-uhd460/uhd_b210_capture_framed_udp"
+    "/path/to/PhantomChannel/receiver/build-uhd460/uhd_b210_capture_framed_udp"
 )
 UHD_LIBRARY = Path("/path/to/uhd-4.6.0.0/lib")
 SC16_BYTES_PER_SAMPLE = 4
@@ -140,7 +140,7 @@ def run_b210_capture(
     run_id: str,
     target_name: str,
 ) -> dict[str, Any]:
-    """Capture SC16 IQ with BLE_encrypt_check's framed UHD binary."""
+    """Capture SC16 IQ with PhantomChannel receiver's framed UHD binary."""
 
     if not B210_CAPTURE_BIN.is_file():
         raise FileNotFoundError(f"B210 capture binary not found: {B210_CAPTURE_BIN}")

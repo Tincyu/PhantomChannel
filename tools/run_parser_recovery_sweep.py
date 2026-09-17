@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run isolated parser parameter variants for a frozen PhantomChannel IQ run.
 
-This tool invokes the existing BLE_encrypt_check parser as an external,
+This tool invokes the existing PhantomChannel receiver parser as an external,
 read-only process.  Every variant gets a separate output directory and Python
 cache location under PhantomChannel.  It never edits the external project and
 fails if the guarded source/native hashes change.
@@ -21,7 +21,7 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-BLE_ROOT = Path("/path/to/BLE_encrypt_check")
+BLE_ROOT = Path("/path/to/PhantomChannel/receiver")
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -211,14 +211,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         current = ble_guard_snapshot()
         if current != before:
-            raise RuntimeError("BLE_encrypt_check guard changed during parser sweep")
+            raise RuntimeError("PhantomChannel receiver guard changed during parser sweep")
     after = ble_guard_snapshot()
     summary = {
         "schema_version": 1,
         "run_root": str(run_root),
         "output_dir": str(sweep_root),
         "variants": results,
-        "ble_encrypt_check_guard": {
+        "receiver_guard": {
             "before": before,
             "after": after,
             "unchanged": before == after,
@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         "notes": [
             "Parser outputs and Python/cache locations are isolated under this sweep directory.",
             "matching_v2 outputs are diagnostic and remain separate from frozen recovery_metrics.json.",
-            "No parser source, configuration, build artifact, or default command in BLE_encrypt_check is modified.",
+            "No parser source, configuration, build artifact, or default command in PhantomChannel receiver is modified.",
         ],
     }
     write_json(sweep_root / "sweep_summary.json", summary)

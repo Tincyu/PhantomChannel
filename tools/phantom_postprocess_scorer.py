@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phantom-aware duration rescorer for BLE parser candidates.
 
-This tool intentionally lives in PhantomChannel instead of BLE_encrypt_check.
+This tool intentionally lives in PhantomChannel instead of PhantomChannel receiver.
 It reads the existing parser CSV outputs plus the IQ file, then compares each
 matched BLE candidate against two physical-length hypotheses:
 
@@ -1259,7 +1259,7 @@ def rescore_run(
         "threshold_sigma": threshold_sigma,
         "min_threshold_ratio": min_threshold_ratio,
         "notes": [
-            "This is a PhantomChannel-local post-processing scorer; it does not modify BLE_encrypt_check.",
+            "This is a PhantomChannel-local post-processing scorer; it does not modify PhantomChannel receiver.",
             "It tests whether matched BLE candidates physically look closer to standard BLE duration or standard+post-CRC Phantom duration.",
             "Parser-exported post_crc_hex remains the primary recovery path.",
             "For standard-only Phantom-supported candidates, the tool also attempts a local IQ tail extraction of the PC frame.",

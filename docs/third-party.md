@@ -1,9 +1,9 @@
 # Source and dependency boundary
 
-`vendor/BLE_encrypt_check/` is an author-owned source snapshot included with
-PhantomChannel, not an unrelated third-party SDK. Its `SOURCE_MANIFEST.sha256`
-and README record the snapshot provenance; historical workstation paths in
-that record have been anonymized for publication.
+`receiver/` is project-owned PhantomChannel source, not an unrelated third-party
+SDK or a renamed copy of another project. Its
+`SOURCE_MANIFEST.sha256` records the integrity of the published receiver and
+parser implementation.
 
 The Zephyr controller patch is based on `nrfconnect/sdk-zephyr` tag
 `v4.0.99-ncs1-1`. The `firmware/nrf52840dk/phantomchannel_peripheral/`

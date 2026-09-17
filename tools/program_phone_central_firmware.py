@@ -3,7 +3,7 @@
 
 This script intentionally operates only on the
 ``phantomchannel_central_gatt_write`` sample.  It does not modify the HRS
-peripheral sample, BLE_encrypt_check, or the X310 test configuration.  The
+peripheral sample, PhantomChannel receiver, or the X310 test configuration.  The
 central sample defaults to symmetric 2M PHY and can be selected for symmetric
 1M comparison mode before it starts Phantom writes.
 """

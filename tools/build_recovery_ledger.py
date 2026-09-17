@@ -2,7 +2,7 @@
 """Build a read-only recovery-investigation ledger for one PhantomChannel run.
 
 The tool creates a new analysis directory and never overwrites frozen run
-artifacts.  It records the BLE_encrypt_check dependency state before and after
+artifacts.  It records the PhantomChannel receiver dependency state before and after
 the analysis, then runs the investigation-only matching v2 and a bounded local
 IQ duration probe around the parser/diagnostic sample positions.
 """
@@ -306,7 +306,7 @@ def build_manifest(
             "blind_recovery_claim_allowed": False,
         },
         "local_iq_probe": probe,
-        "ble_encrypt_check_guard": {
+        "receiver_guard": {
             "before": before_guard,
             "after": after_guard,
             "unchanged": before_guard == after_guard,
@@ -402,13 +402,13 @@ def main(argv: list[str] | None = None) -> int:
         probe,
     )
     write_json(output_dir / "manifest.json", manifest)
-    write_json(output_dir / "ble_encrypt_check_guard.json", manifest["ble_encrypt_check_guard"])
+    write_json(output_dir / "receiver_guard.json", manifest["receiver_guard"])
     write_json(output_dir / "validation_report.json", {
         "analysis_id": args.analysis_id,
         "diagnostic_only": True,
         "funnel_closes_to_all_ll_attempts": len(analysis["attempts"]) == sum(analysis["summary"]["failure_stage_counts_all"].values()),
         "funnel_closes_to_iq_window": analysis["summary"]["tx_attempts_in_iq_window"] == sum(analysis["summary"]["failure_stage_counts_in_iq_window"].values()),
-        "ble_encrypt_check_unchanged": before_guard == after_guard,
+        "receiver_unchanged": before_guard == after_guard,
         "blind_recovery_claim_allowed": False,
         "notes": [
             "The local IQ duration probe uses parser/diagnostic sample positions and is not an independent burst detector.",

@@ -4,7 +4,7 @@
 The ordinary parser correctly rejects malformed connection access addresses.
 PIP intentionally uses such an outer AA, so this local entrypoint only relaxes
 that one validation for the AA supplied in ``PHANTOM_PIP_ALLOW_AA``.  It does
-not modify the BLE_encrypt_check source tree and otherwise executes the same
+not modify the PhantomChannel receiver source tree and otherwise executes the same
 entrypoint and command-line path.
 """
 

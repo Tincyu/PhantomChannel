@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the vendored BLE_encrypt_check-compatible C++ parser extension."""
+"""Build the project-owned PhantomChannel receiver C++ parser extension."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def main() -> int:
     parser.add_argument(
         "--build-dir",
         type=Path,
-        default=PROJECT_ROOT / "artifacts" / "native" / "ble_encrypt_check",
+        default=PROJECT_ROOT / "artifacts" / "native" / "receiver",
     )
     args = parser.parse_args()
     # Preserve a venv launcher symlink.  Resolving it would silently select the
@@ -30,7 +30,7 @@ def main() -> int:
     build_dir = args.build_dir.expanduser().resolve()
     native_dir = source_root / "native"
     if not (native_dir / "CMakeLists.txt").is_file():
-        raise SystemExit(f"vendored BLE native source not found: {native_dir}")
+        raise SystemExit(f"receiver native source not found: {native_dir}")
     if not python.is_file():
         raise SystemExit(f"Python interpreter not found: {python}")
     configure = [
@@ -40,9 +40,8 @@ def main() -> int:
         "-B",
         str(build_dir),
         f"-DPython3_EXECUTABLE={python}",
-        # Keep the extension version aligned with the vendored smoke test and
-        # the public native-backend contract.  The output directory already
-        # identifies this build as the vendored BLE_encrypt_check backend.
+        # Keep the extension version aligned with the receiver smoke test and
+        # the public native-backend contract.
         "-DBT_NATIVE_VERSION=0.1.0",
     ]
     subprocess.run(configure, cwd=PROJECT_ROOT, check=True)

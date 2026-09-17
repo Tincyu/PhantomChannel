@@ -3,7 +3,7 @@
 
 This runner is deliberately local to PhantomChannel.  It reuses the existing
 X310 capture/parser helpers and the existing 52840 RTT/BlueZ conventions, but
-does not modify or execute code from BLE_encrypt_check except as the parser
+does not modify or execute code from PhantomChannel receiver except as the parser
 entrypoint during the optional replay stage.
 
 The hardware order is:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit an oracle/controller PIP record without touching BLE_encrypt_check.
+"""Audit an oracle/controller PIP record without touching PhantomChannel receiver.
 
 The first version is intentionally a packet-structure audit, not an IQ
 demodulator.  It accepts JSON emitted by ``pip_packet_oracle.py`` or a JSON

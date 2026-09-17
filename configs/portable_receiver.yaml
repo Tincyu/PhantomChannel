@@ -62,7 +62,7 @@ rtt:
 
 parser:
   enabled: false
-  source_project_root: vendor/BLE_encrypt_check
+  source_project_root: receiver
   python: .venv-cuda/bin/python
   entrypoint: experiment/bt_40m_pfb_realtime.py
   iq_format: int16

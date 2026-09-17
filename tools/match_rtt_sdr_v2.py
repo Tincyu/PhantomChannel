@@ -2,7 +2,7 @@
 """Time-gated, one-to-one RTT/S​​DR matching for PhantomChannel investigation.
 
 This is an investigation-only matcher.  It does not replace
-``match_rtt_sdr_results.py`` and it never writes into BLE_encrypt_check.
+``match_rtt_sdr_results.py`` and it never writes into PhantomChannel receiver.
 The matcher uses the frozen run's existing exact rows only to estimate the
 RTT-sequence to IQ-sample affine map.  The output labels this as a diagnostic
 alignment source; it is not a blind-recovery result.

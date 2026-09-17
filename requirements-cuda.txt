@@ -1,5 +1,5 @@
 # Python 3.12 CUDA runtime used by PhantomChannel's optional batch IQ filter.
-# Versions mirror the validated BLE_encrypt_check/.venv-cuda environment.
+# Versions mirror the validated PhantomChannel receiver/.venv-cuda environment.
 numpy==2.4.6
 scipy==1.17.1
 cupy-cuda12x==14.1.1

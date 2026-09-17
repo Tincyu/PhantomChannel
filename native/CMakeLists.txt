@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(PHANTOM_BLE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../vendor/BLE_encrypt_check" CACHE PATH
-    "Read-only BLE_encrypt_check source tree used by the PhantomChannel native facade")
+set(PHANTOM_BLE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../receiver" CACHE PATH
+    "PhantomChannel receiver source tree used by the native facade")
 set(PHANTOM_BT_NATIVE_VERSION "phantomchannel-local-0.2.0" CACHE STRING
     "Version reported by the PhantomChannel-local native facade")
 

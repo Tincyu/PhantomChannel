@@ -2,7 +2,7 @@
 """Opt-in local multi-hypothesis Phantom tail recovery.
 
 The decoder reads parser observations and nearby IQ from a PhantomChannel run.
-It does not modify BLE_encrypt_check.  The decoder's winner is chosen only by
+It does not modify PhantomChannel receiver.  The decoder's winner is chosen only by
 the known BLE prefix and the self-contained Phantom frame format/integrity;
 RTT ground truth is loaded only into a separate audit CSV after decoding.
 """
@@ -335,7 +335,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "This investigation decoder does not use RTT seq or payload to select a hypothesis.",
             "rtt_guided_audit.csv is scoring-only and must not be reported as blind recovery.",
             "The existing phantom_postprocess_scorer default extractor is unchanged.",
-            "BLE_encrypt_check is an external read-only dependency and is not modified.",
+            "PhantomChannel receiver source is treated as read-only during recovery.",
         ],
     }
     write_json(output_dir / "local_tail_recovery_summary.json", summary)

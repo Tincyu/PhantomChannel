@@ -1,5 +1,10 @@
 # PhantomChannel
 
+**Accepted at ACM CCS 2026**
+
+*PhantomChannel: A Parasitic Covert Channel via a Parsing-Boundary Blind Spot
+in BLE Link-Layer Traffic*
+
 PhantomChannel is an open-source research prototype for transmitting and
 recovering an auxiliary frame alongside Bluetooth Low Energy traffic. The
 transmitter places project data after the normal BLE CRC, while an ordinary

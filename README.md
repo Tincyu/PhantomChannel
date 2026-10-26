@@ -30,7 +30,6 @@ IQ captures are kept outside Git.
 - `tests/` contains hardware-independent regression tests.
 - `reproduction/` contains the offline figure, table, tail-energy and
   auxiliary-experiment analysis code and the one-command package runner.
-- `ae/` contains the restricted SSH entry point for artifact evaluation.
 
 ## Quick start
 
@@ -45,7 +44,7 @@ python3 -m venv .venv
 .venv/bin/python -m pytest -q
 ```
 
-The source regression suite contains 163 tests.
+The source regression suite contains 158 tests.
 
 ## Offline experiment reproduction
 
@@ -84,8 +83,7 @@ cp config/local.env.example config/local.env
 ```
 
 Edit the copied file for the workstation and review the selected YAML profile
-under `configs/`. Setup notes are in [docs/setup.md](docs/setup.md); the AE
-workflow is described in [docs/ae-evaluation.md](docs/ae-evaluation.md).
+under `configs/`. Setup notes are in [docs/setup.md](docs/setup.md).
 
 For the broadcast-only runtime path, use
 [`tools/adv_broadcast_realtime.py`](tools/adv_broadcast_realtime.py). It accepts

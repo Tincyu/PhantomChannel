@@ -40,7 +40,7 @@ it does not resolve redistribution rights, reviewability or reproducibility.
 - build outputs other than explicitly reviewed release images under
   `firmware/images/`;
 - raw `.sc16`, IQ, PCAP, complete UART/RTT logs and hardware result directories;
-- real board serial numbers, private paths, credentials, SSH keys and AE config.
+- real board serial numbers, private paths, credentials, SSH keys and local config.
 
 Do not run `git add -A`, `git add .`, `git add -f`, `git push --all` or
 `git push --mirror` as part of the publication workflow. Stage an explicit

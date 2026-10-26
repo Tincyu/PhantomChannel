@@ -1,0 +1,9 @@
+# Preserve release firmware bytes and present them as binary assets.
+firmware/images/*.hex binary
+firmware/images/*.bin binary
+firmware/images/*.elf binary
+firmware/images/*.img binary
+
+# Patch context and retained upstream files preserve their original whitespace.
+patches/zephyr/*.patch -whitespace
+firmware/sx1280/source/* -whitespace

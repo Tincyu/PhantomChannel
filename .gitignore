@@ -35,6 +35,10 @@ dist/
 *.map
 *.lst
 *.uf2
+!firmware/images/
+!firmware/images/*.hex
+!firmware/images/sx1280-gatt-counter-direct-tail.bin
+!firmware/images/sx1280-gatt-counter-direct-tail.elf
 
 # Runtime logs and command output
 *.log

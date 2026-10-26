@@ -11,6 +11,12 @@ through the parser's existing stdin interface:
   ``--known-ble-aa``; the local C++ backend parses native candidates and the
   PhantomChannel remapping stage applies the same AA/Hamming filter.
 
+With ``--consistency-anchor``, the first pass covers the capture and selects
+repeated connection-event pairs where an empty central LL packet is followed
+by a non-empty peripheral packet with the same AA.  Stage 2 then starts at the
+beginning of the capture, so a fixed bootstrap delay is not used to discover
+the connection AA.
+
 No files in the bundled PhantomChannel receiver are modified. Stage-2 rows are
 sample-offset back to the original IQ stream before they are merged.
 """
@@ -156,6 +162,148 @@ def row_wideband_sample(row: dict[str, Any], decim: float) -> int | None:
         return wide
     sub = parse_int(row.get("sample_index"))
     return int(round(sub * decim)) if sub is not None else None
+
+
+def consistency_anchor_clusters(
+    rows: Iterable[dict[str, Any]],
+    *,
+    sample_rate_sps: float,
+    window_us: float,
+    min_pairs: int,
+    max_addresses: int,
+    excluded_addresses: Iterable[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Find connection AAs from empty-before-data packet consistency.
+
+    A BLE connection event is initiated by the central.  When the central has
+    no application payload, its first LL data PDU is empty; the peripheral's
+    response follows after TIFS and carries the HRS/Phantom payload.  Pairing
+    those two observations is a stronger AA anchor than counting arbitrary
+    packets from a narrow-band capture.  The returned cluster shape matches
+    :func:`tolerant_access_address_clusters`, so it can be fed directly to the
+    normal stage-2 remapper.
+    """
+
+    if sample_rate_sps <= 0 or window_us <= 0 or min_pairs < 1 or max_addresses < 1:
+        raise ValueError("invalid consistency-anchor parameters")
+    excluded = {
+        normalize_hex_id(item) for item in excluded_addresses if normalize_hex_id(item)
+    }
+    by_address: defaultdict[str, list[tuple[int, int, dict[str, Any]]]] = defaultdict(list)
+    rows_seen = 0
+    for row in rows:
+        if not row_is_connection(row):
+            continue
+        address = normalize_hex_id(row.get("access_address"))
+        if not address or any(
+            hamming_distance(address, excluded_address) <= DEFAULT_AA_TOLERANCE_BITS
+            for excluded_address in excluded
+        ):
+            continue
+        sample = row_wideband_sample(row, 1.0)
+        payload_len = parse_int(row.get("payload_len"))
+        if sample is None or payload_len is None or payload_len < 0:
+            continue
+        by_address[address].append((sample, payload_len, row))
+        rows_seen += 1
+
+    # The parser may emit several aliases at one sample.  Work on unique
+    # (AA, sample) observations so aliases cannot inflate pair counts.
+    min_gap = max(1, int(round(sample_rate_sps * 20e-6)))
+    max_gap = max(min_gap, int(round(sample_rate_sps * window_us / 1e6)))
+    candidates: list[tuple[int, str, set[int], set[int]]] = []
+    for address, observations in by_address.items():
+        empty_samples = sorted({sample for sample, length, _row in observations if length == 0})
+        data_samples = sorted({sample for sample, length, _row in observations if length > 0})
+        if not empty_samples or not data_samples:
+            continue
+        pairs: set[tuple[int, int]] = set()
+        for empty_sample in empty_samples:
+            for data_sample in data_samples:
+                delta = data_sample - empty_sample
+                if delta < min_gap:
+                    continue
+                if delta > max_gap:
+                    break
+                pairs.add((empty_sample, data_sample))
+        if len(pairs) < min_pairs:
+            continue
+        candidates.append(
+            (
+                len(pairs),
+                address,
+                {sample for empty_sample, _data_sample in pairs for sample in (empty_sample,)},
+                {sample for _empty_sample, data_sample in pairs for sample in (data_sample,)},
+            )
+        )
+
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    selected = candidates[:max_addresses]
+    clusters: list[dict[str, Any]] = []
+    for pair_count, address, empty_samples, data_samples in selected:
+        selected_samples = empty_samples | data_samples
+        selected_rows = [
+            row
+            for sample, _length, row in by_address[address]
+            if sample in selected_samples
+        ]
+        samples = sorted(selected_samples)
+        timestamps = [
+            timestamp
+            for timestamp in (parse_float(row.get("timestamp_s")) for row in selected_rows)
+            if timestamp is not None
+        ]
+        channels = sorted(
+            {
+                channel
+                for channel in (parse_int(row.get("channel")) for row in selected_rows)
+                if channel is not None
+            }
+        )
+        confidence = [
+            score
+            for score in (parse_float(row.get("confidence_score")) for row in selected_rows)
+            if score is not None
+        ]
+        clusters.append(
+            {
+                "cluster_id": f"consistency:aa:0x{address}",
+                "canonical_access_address": f"0x{address}",
+                "canonical_access_address_hex": address,
+                "observation_count": len(selected_rows),
+                "exact_value_count": len(selected_rows),
+                "aliases": [{"access_address": f"0x{address}", "count": len(selected_rows), "hamming_distance": 0}],
+                "hamming_tolerance_bits": 0,
+                "first_sample": min(samples) if samples else None,
+                "last_sample": max(samples) if samples else None,
+                "first_timestamp_s": min(timestamps) if timestamps else None,
+                "last_timestamp_s": max(timestamps) if timestamps else None,
+                "channels": channels,
+                "mean_confidence_score": sum(confidence) / len(confidence) if confidence else None,
+                "consistency_pair_count": pair_count,
+                "empty_packet_count": len(empty_samples),
+                "data_packet_count": len(data_samples),
+            }
+        )
+    stats = {
+        "rows_considered": rows_seen,
+        "candidate_address_count": len(candidates),
+        "selected_address_count": len(clusters),
+        "min_pairs": min_pairs,
+        "window_us": window_us,
+        "min_gap_us": min_gap * 1e6 / sample_rate_sps,
+        "max_gap_us": max_gap * 1e6 / sample_rate_sps,
+        "selected": [
+            {
+                "access_address": cluster["canonical_access_address"],
+                "pair_count": cluster["consistency_pair_count"],
+                "empty_packet_count": cluster["empty_packet_count"],
+                "data_packet_count": cluster["data_packet_count"],
+            }
+            for cluster in clusters
+        ],
+    }
+    return clusters, stats
 
 
 def tolerant_access_address_clusters(
@@ -1206,7 +1354,11 @@ def build_summary(
     ]
     return {
         "schema_version": 1,
-        "mode": "two_stage_known_access_address",
+        "mode": (
+            "two_stage_consistency_anchor"
+            if getattr(args, "consistency_anchor", False)
+            else "two_stage_known_access_address"
+        ),
         "receiver_modified": False,
         "frontend_backend_requested": args.frontend_backend,
         "frontend_backend_used": getattr(args, "_frontend_backend_used", "unknown"),
@@ -1224,7 +1376,9 @@ def build_summary(
         "sample_rate_sps": args.sample_rate_sps,
         "subband_sample_rate_sps": args.subband_sample_rate_sps,
         "boundary": {
-            "bootstrap_duration_s": args.bootstrap_duration_s,
+            "bootstrap_duration_s": (
+                0.0 if getattr(args, "consistency_anchor", False) else args.bootstrap_duration_s
+            ),
             "boundary_sample": boundary_sample,
             "boundary_time_s": boundary_sample / args.sample_rate_sps,
             "total_samples": total_samples,
@@ -1243,6 +1397,7 @@ def build_summary(
             "stage2_known_address_stats": known_address_stats,
             "stage2_known_aa_bit_tolerance": args.stage2_known_aa_bit_tolerance,
         },
+        "consistency_anchor": getattr(args, "_consistency_anchor_stats", {}),
         "stage1": stage1_status,
         "stage2": {
             **stage2_status,
@@ -1331,6 +1486,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bandwidth-hz", type=float, default=80e6)
     parser.add_argument("--bootstrap-duration-s", type=float, default=2.0)
     parser.add_argument("--known-aa-min-count", type=int, default=DEFAULT_MIN_AA_COUNT)
+    parser.add_argument(
+        "--consistency-anchor",
+        action="store_true",
+        help=(
+            "Use repeated empty-before-data connection-event pairs as the AA anchor; "
+            "stage 2 then parses from the beginning instead of waiting for a bootstrap window."
+        ),
+    )
+    parser.add_argument(
+        "--consistency-window-us",
+        type=float,
+        default=1000.0,
+        help="Maximum empty-to-data start-time gap for the consistency anchor.",
+    )
+    parser.add_argument(
+        "--consistency-min-pairs",
+        type=int,
+        default=2,
+        help="Minimum empty-before-data pairs required for one anchored AA.",
+    )
+    parser.add_argument(
+        "--consistency-max-addresses",
+        type=int,
+        default=8,
+        help="Maximum consistency-anchored AAs passed to stage 2.",
+    )
     parser.add_argument("--known-aa-hamming-tolerance", type=int, default=DEFAULT_AA_TOLERANCE_BITS)
     parser.add_argument(
         "--stage2-known-aa-bit-tolerance",
@@ -1348,6 +1529,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Explicit connection AA to include in stage 2. Use only when an external "
             "controller ledger supplies a verified AA (for example a PIP fake AA)."
+        ),
+    )
+    parser.add_argument(
+        "--only-forced-known-aa",
+        action="store_true",
+        help=(
+            "Restrict stage 2 to the AAs supplied with --force-known-aa. "
+            "Stage 1 still performs the normal current-capture bootstrap and records its candidates."
         ),
     )
     parser.add_argument(
@@ -1442,6 +1631,12 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError("--bootstrap-duration-s must be positive")
     if args.known_aa_min_count < 1:
         raise ValueError("--known-aa-min-count must be positive")
+    if args.consistency_window_us <= 0:
+        raise ValueError("--consistency-window-us must be positive")
+    if args.consistency_min_pairs < 1:
+        raise ValueError("--consistency-min-pairs must be positive")
+    if args.consistency_max_addresses < 1:
+        raise ValueError("--consistency-max-addresses must be positive")
     if not 0 <= args.known_aa_hamming_tolerance <= 32:
         raise ValueError("--known-aa-hamming-tolerance must be in [0, 32]")
     if not 0 <= args.stage2_known_aa_bit_tolerance <= 2:
@@ -1477,6 +1672,13 @@ def run(args: argparse.Namespace) -> int:
     metadata_samples = parse_int(metadata.get("samples"))
     total_samples = min(file_samples, metadata_samples) if metadata_samples else file_samples
     boundary_sample = min(total_samples, int(round(args.bootstrap_duration_s * args.sample_rate_sps)))
+    if args.consistency_anchor:
+        # Keep one sample in stage 1 so the existing remapper's strict
+        # boundary check remains well-defined; stage 2 itself starts at 0.
+        boundary_sample = 1
+        stage1_end_sample = total_samples
+    else:
+        stage1_end_sample = boundary_sample
     if boundary_sample <= 0 or boundary_sample >= total_samples:
         raise ValueError("bootstrap boundary must leave a non-empty stage-2 window")
 
@@ -1487,7 +1689,7 @@ def run(args: argparse.Namespace) -> int:
         args.iq_path,
         stage1_dir,
         0,
-        boundary_sample,
+        stage1_end_sample,
         [],
         args.stage1_ble_parser_backend,
         score_threshold=args.stage1_ble_score_threshold,
@@ -1498,17 +1700,55 @@ def run(args: argparse.Namespace) -> int:
 
     stage1_rows, stage1_fields = read_csv(stage1_dir / "ble_packets.csv")
     decim = args.sample_rate_sps / args.subband_sample_rate_sps
-    known_clusters, cluster_stats = tolerant_access_address_clusters(
-        stage1_rows,
-        tolerance_bits=args.known_aa_hamming_tolerance,
-        min_count=args.known_aa_min_count,
-        excluded_addresses=args.exclude_access_address,
-    )
+    consistency_anchor_stats: dict[str, Any] = {}
+    if args.consistency_anchor:
+        known_clusters, consistency_anchor_stats = consistency_anchor_clusters(
+            stage1_rows,
+            sample_rate_sps=args.sample_rate_sps,
+            window_us=args.consistency_window_us,
+            min_pairs=args.consistency_min_pairs,
+            max_addresses=args.consistency_max_addresses,
+            excluded_addresses=args.exclude_access_address,
+        )
+        cluster_stats = {
+            "connection_rows_considered": consistency_anchor_stats["rows_considered"],
+            "unique_exact_access_addresses": consistency_anchor_stats["candidate_address_count"],
+            "rejected_advertising_rows": 0,
+            "rejected_non_connection_rows": 0,
+            "qualifying_clusters": consistency_anchor_stats["selected_address_count"],
+        }
+        if not known_clusters:
+            # Some phone stacks do not expose the empty central response to the
+            # external parser even though the peripheral data packets are
+            # decodable.  Keep the consistency path primary, but fall back to
+            # the count-based candidates rather than failing before stage 2.
+            fallback_clusters, fallback_stats = tolerant_access_address_clusters(
+                stage1_rows,
+                tolerance_bits=args.known_aa_hamming_tolerance,
+                min_count=args.known_aa_min_count,
+                excluded_addresses=args.exclude_access_address,
+            )
+            if fallback_clusters:
+                known_clusters = fallback_clusters[: args.consistency_max_addresses]
+                cluster_stats = fallback_stats
+                consistency_anchor_stats["fallback"] = "count_bootstrap"
+                consistency_anchor_stats["fallback_cluster_stats"] = fallback_stats
+                consistency_anchor_stats["fallback_truncated_to"] = len(known_clusters)
+    else:
+        known_clusters, cluster_stats = tolerant_access_address_clusters(
+            stage1_rows,
+            tolerance_bits=args.known_aa_hamming_tolerance,
+            min_count=args.known_aa_min_count,
+            excluded_addresses=args.exclude_access_address,
+        )
     known_addresses, known_address_stats = expand_stage2_known_access_addresses(
         known_clusters,
         bit_tolerance=args.stage2_known_aa_bit_tolerance,
         excluded_addresses=args.exclude_access_address,
     )
+    bootstrap_candidate_addresses = [
+        cluster["canonical_access_address"] for cluster in known_clusters
+    ]
     forced_addresses = []
     for value in args.force_known_aa:
         normalized = normalize_hex_id(value)
@@ -1536,7 +1776,18 @@ def run(args: argparse.Namespace) -> int:
                     "mean_confidence_score": None,
                 }
             )
+    if args.only_forced_known_aa:
+        if not forced_addresses:
+            raise ValueError("--only-forced-known-aa requires at least one --force-known-aa")
+        known_addresses = forced_addresses.copy()
+        forced_set = set(forced_addresses)
+        known_clusters = [
+            cluster
+            for cluster in known_clusters
+            if cluster.get("canonical_access_address") in forced_set
+        ]
     known_address_stats["forced_known_address_count"] = len(forced_addresses)
+    args._consistency_anchor_stats = consistency_anchor_stats
     write_json(
         args.output_dir / "known_access_addresses.json",
         {
@@ -1547,6 +1798,7 @@ def run(args: argparse.Namespace) -> int:
             "minimum_observations": args.known_aa_min_count,
             "selected_address_count": len(known_clusters),
             "selected_addresses": known_clusters,
+            "bootstrap_candidate_addresses": bootstrap_candidate_addresses,
             "selection_is_unbounded": True,
             "stage2_known_addresses": known_addresses,
             "stage2_known_address_policy": {
@@ -1570,7 +1822,7 @@ def run(args: argparse.Namespace) -> int:
         write_json(args.output_dir / "validation_summary.json", summary)
         return 2
 
-    stage2_start = max(0, boundary_sample - args.overlap_samples)
+    stage2_start = 0 if args.consistency_anchor else max(0, boundary_sample - args.overlap_samples)
     stage2_status = run_parser_window(
         args,
         args.iq_path,

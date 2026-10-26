@@ -1,9 +1,18 @@
 # Safe GitHub publishing
 
 This repository publishes project source, focused SDK patches, configuration
-examples, tests and small result summaries. It must not publish complete SDKs,
-toolchains, generated build trees, firmware binaries, raw captures or local
+examples, tests and selected release firmware. It must not publish complete
+SDKs, toolchains, generated build trees, raw captures, test logs or local
 evaluation state.
+
+The offline analysis code is published under `reproduction/`. Its runner
+reads the separately distributed experiment ZIP and writes extracted inputs
+and generated results under the ignored `artifacts/` directory. Keep those
+data and outputs outside the source commit.
+
+Each release firmware file must appear in `firmware/images/MANIFEST.json`
+with a matching digest. The publication gate permits only those manifest
+entries, including the SX1280 `.bin`/`.elf` and DA14695 `.img` files.
 
 ## Publication model
 
@@ -16,8 +25,8 @@ with all of the following instead:
 3. project-owned applications, overlays and build configuration;
 4. a script or documented command that checks the base before applying the
    patch; and
-5. small, sanitized test summaries and hashes, while raw IQ and full logs stay
-   in the outer local `test/` area.
+5. a small build manifest for selected release firmware, while raw IQ, full
+   logs and test runs stay outside Git.
 
 Do not use Git LFS as a way to publish an SDK. LFS changes storage mechanics;
 it does not resolve redistribution rights, reviewability or reproducibility.
@@ -28,7 +37,8 @@ it does not resolve redistribution rights, reviewability or reproducibility.
   repositories, Simplicity SDK and SimpleLink SDK;
 - `build/`, `artifacts/`, `.west/`, `.venv/`, generated `autogen/` trees and
   compiler output;
-- `.hex`, `.bin`, `.elf`, `.out`, `.map`, `.obj`, archives and installers;
+- build outputs other than explicitly reviewed release images under
+  `firmware/images/`;
 - raw `.sc16`, IQ, PCAP, complete UART/RTT logs and hardware result directories;
 - real board serial numbers, private paths, credentials, SSH keys and AE config.
 

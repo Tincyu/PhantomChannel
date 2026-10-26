@@ -1,0 +1,793 @@
+--- a/samples/bluetooth/phantomchannel_central_gatt_write/src/main.c
++++ b/samples/bluetooth/phantomchannel_central_gatt_write/src/main.c
+@@ -21,6 +21,8 @@
+ #include <zephyr/bluetooth/gap.h>
+ #include <zephyr/bluetooth/hci.h>
+ #include <zephyr/bluetooth/uuid.h>
++#include <zephyr/net/buf.h>
++#include <zephyr/shell/shell.h>
+ 
+ #define PHANTOM_SERVICE_UUID \
+ 	BT_UUID_128_ENCODE(0x0000ff00, 0x0000, 0x1000, 0x8000, 0x00805f9b34fb)
+@@ -30,9 +32,10 @@
+ #define PHANTOM_MARKER_LEN 3U
+ #define PHANTOM_FRAME_OVERHEAD 6U
+ #define PHANTOM_WRITE_PREFIX_LEN 1U
+-#define PHANTOM_FRAME_LEN (PHANTOM_FRAME_OVERHEAD + CONFIG_PHANTOMCHANNEL_COVERT_LEN)
+-#define PHANTOM_WRITE_VALUE_LEN \
+-	(PHANTOM_WRITE_PREFIX_LEN + PHANTOM_MARKER_LEN + PHANTOM_FRAME_LEN)
++#define PHANTOM_MAX_COVERT_LEN 234U
++#define PHANTOM_MAX_FRAME_LEN (PHANTOM_FRAME_OVERHEAD + PHANTOM_MAX_COVERT_LEN)
++#define PHANTOM_MAX_WRITE_VALUE_LEN \
++	(PHANTOM_WRITE_PREFIX_LEN + PHANTOM_MARKER_LEN + PHANTOM_MAX_FRAME_LEN)
+ 
+ #define PHANTOM_PC_MAGIC_0 0x50U
+ #define PHANTOM_PC_MAGIC_1 0x43U
+@@ -40,10 +43,8 @@
+ #define CENTRAL_NEAREST_SCAN_WINDOW_MS 1000U
+ #define PHANTOM_DEBUG_CONN_INTERVAL_UNITS CONFIG_PHANTOMCHANNEL_CONN_INTERVAL_UNITS
+ 
+-BUILD_ASSERT(CONFIG_PHANTOMCHANNEL_COVERT_LEN <= 234U,
+-	     "central payload must fit in one 251-byte LL PDU");
+-BUILD_ASSERT(PHANTOM_WRITE_VALUE_LEN <= 244U,
+-	     "GATT write value exceeds the single-PDU budget");
++BUILD_ASSERT(PHANTOM_MAX_WRITE_VALUE_LEN <= 244U,
++	     "central payload budget exceeds one 251-byte LL PDU");
+ 
+ static struct bt_uuid_128 service_uuid = BT_UUID_INIT_128(PHANTOM_SERVICE_UUID);
+ static struct bt_uuid_128 write_uuid = BT_UUID_INIT_128(PHANTOM_WRITE_UUID);
+@@ -90,13 +91,68 @@
+ static uint32_t previous_failed_count;
+ static bool required_phy_ready;
+ 
+-static uint8_t write_value[PHANTOM_WRITE_VALUE_LEN];
++static uint8_t write_value[PHANTOM_MAX_WRITE_VALUE_LEN];
++static uint8_t covert_payload[PHANTOM_MAX_COVERT_LEN];
++static size_t covert_len;
++static bool covert_enabled;
++static char covert_hex[2U * PHANTOM_MAX_COVERT_LEN + 1U];
++static const uint8_t full_channel_map[5] = {
++	0xffU, 0xffU, 0xffU, 0xffU, 0x1fU
++};
+ 
+ static void schedule_scan(k_timeout_t delay);
+ static void disconnect_current(void);
+ static uint8_t discover_func(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+ 			     struct bt_gatt_discover_params *params);
+ 
++static int configure_full_channel_map(void)
++{
++	uint8_t map[5];
++	int err;
++
++	memcpy(map, full_channel_map, sizeof(map));
++	err = bt_le_set_chan_map(map);
++	printk("CENTRAL_CHAN_MAP_REQUESTED {\"map\":\"ffffffff1f\",\"status\":%d}\n",
++	       err);
++	return err;
++}
++
++static void log_active_channel_map(struct bt_conn *conn)
++{
++	struct bt_hci_cp_le_read_chan_map *cp;
++	struct bt_hci_rp_le_read_chan_map *rp;
++	struct net_buf *cmd;
++	struct net_buf *rsp = NULL;
++	uint16_t handle;
++	int err;
++
++	err = bt_hci_get_conn_handle(conn, &handle);
++	if (err != 0) {
++		printk("CENTRAL_CHAN_MAP_READ {\"status\":%d}\n", err);
++		return;
++	}
++	cmd = bt_hci_cmd_create(BT_HCI_OP_LE_READ_CHAN_MAP, sizeof(*cp));
++	if (cmd == NULL) {
++		printk("CENTRAL_CHAN_MAP_READ {\"status\":-ENOMEM}\n");
++		return;
++	}
++	cp = net_buf_add(cmd, sizeof(*cp));
++	cp->handle = sys_cpu_to_le16(handle);
++	err = bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_CHAN_MAP, cmd, &rsp);
++	if (err != 0 || rsp == NULL || rsp->len < sizeof(*rp)) {
++		printk("CENTRAL_CHAN_MAP_READ {\"status\":%d}\n", err);
++		if (rsp != NULL) {
++			net_buf_unref(rsp);
++		}
++		return;
++	}
++	rp = (struct bt_hci_rp_le_read_chan_map *)rsp->data;
++	printk("CENTRAL_CHAN_MAP_ACTIVE {\"status\":%u,\"map\":\"%02x%02x%02x%02x%02x\"}\n",
++	       rp->status, rp->ch_map[0], rp->ch_map[1], rp->ch_map[2],
++	       rp->ch_map[3], rp->ch_map[4]);
++	net_buf_unref(rsp);
++}
++
+ static void set_state(enum central_state new_state)
+ {
+ 	k_mutex_lock(&state_mutex, K_FOREVER);
+@@ -176,35 +232,120 @@
+ #endif
+ #endif
+ 
+-static void build_write_value(uint16_t sequence)
++static size_t build_write_value(uint16_t sequence)
+ {
+-	uint8_t *frame = &write_value[PHANTOM_WRITE_PREFIX_LEN + PHANTOM_MARKER_LEN];
++	uint8_t *frame;
+ 	uint8_t checksum = 0U;
++	size_t frame_len;
++	size_t write_len;
+ 
+-	/* The first byte is a normal application byte before the controller marker. */
++	/* With covert disabled, send only a legal application byte. This is the
++	 * Phase-A traffic state; the controller therefore emits no Phantom marker.
++	 */
+ 	write_value[0] = 0x01U;
++	if (!covert_enabled || covert_len == 0U) {
++		return PHANTOM_WRITE_PREFIX_LEN;
++	}
++
++	frame_len = PHANTOM_FRAME_OVERHEAD + covert_len;
++	write_len = PHANTOM_WRITE_PREFIX_LEN + PHANTOM_MARKER_LEN + frame_len;
+ 	write_value[1] = 0xAAU;
+ 	write_value[2] = 0xAAU;
+ 	write_value[3] = 0x00U;
++	frame = &write_value[PHANTOM_WRITE_PREFIX_LEN + PHANTOM_MARKER_LEN];
+ 
+ 	frame[0] = PHANTOM_PC_MAGIC_0;
+ 	frame[1] = PHANTOM_PC_MAGIC_1;
+ 	sys_put_le16(sequence, &frame[2]);
+-	frame[4] = CONFIG_PHANTOMCHANNEL_COVERT_LEN;
++	frame[4] = (uint8_t)covert_len;
++	memcpy(&frame[5], covert_payload, covert_len);
+ 
+-	/* A5 is deliberately part of the covert payload and is counted in rate. */
+-	frame[5] = PHANTOM_PAYLOAD_MARKER;
+-	for (size_t i = 1U; i < CONFIG_PHANTOMCHANNEL_COVERT_LEN; i++) {
+-		/* 1..233 avoids creating a second aa aa 00 marker in the frame. */
+-		frame[5U + i] = (uint8_t)(1U + ((sequence + i - 1U) % 233U));
++	for (size_t i = 0U; i < (frame_len - 1U); i++) {
++		checksum ^= frame[i];
+ 	}
++	frame[frame_len - 1U] = checksum;
++	return write_len;
++}
+ 
+-	for (size_t i = 0U; i < (PHANTOM_FRAME_LEN - 1U); i++) {
+-		checksum ^= frame[i];
++static void update_covert_hex(void)
++{
++	static const char digits[] = "0123456789abcdef";
++
++	for (size_t i = 0U; i < covert_len; i++) {
++		covert_hex[2U * i] = digits[covert_payload[i] >> 4];
++		covert_hex[2U * i + 1U] = digits[covert_payload[i] & 0x0fU];
+ 	}
+-	frame[PHANTOM_FRAME_LEN - 1U] = checksum;
++	covert_hex[2U * covert_len] = '\0';
+ }
+ 
++static int cmd_conn_covert_hex(const struct shell *sh, size_t argc, char **argv)
++{
++	size_t length;
++
++	ARG_UNUSED(argc);
++	length = hex2bin(argv[1], strlen(argv[1]), covert_payload,
++				PHANTOM_MAX_COVERT_LEN);
++	if (length == 0U || length > PHANTOM_MAX_COVERT_LEN ||
++		strlen(argv[1]) != length * 2U) {
++		shell_error(sh, "hex must contain 1..234 complete bytes");
++		return -EINVAL;
++	}
++
++	k_mutex_lock(&state_mutex, K_FOREVER);
++	covert_len = length;
++	covert_enabled = true;
++	update_covert_hex();
++	k_mutex_unlock(&state_mutex);
++	printk("CENTRAL_COVERT_ACK {\"len\":%u,\"hex\":\"%s\",\"status\":0}\n",
++	       (unsigned int)covert_len, covert_hex);
++	shell_print(sh, "CENTRAL_COVERT_ACK len=%u", (unsigned int)covert_len);
++	return 0;
++}
++
++static int cmd_conn_covert_clear(const struct shell *sh, size_t argc, char **argv)
++{
++	ARG_UNUSED(argc);
++	ARG_UNUSED(argv);
++	k_mutex_lock(&state_mutex, K_FOREVER);
++	covert_len = 0U;
++	covert_enabled = false;
++	covert_hex[0] = '\0';
++	k_mutex_unlock(&state_mutex);
++	printk("CENTRAL_COVERT_ACK {\"len\":0,\"hex\":\"\",\"status\":0}\n");
++	shell_print(sh, "CENTRAL_COVERT_ACK len=0");
++	return 0;
++}
++
++static int cmd_conn_covert_status(const struct shell *sh, size_t argc, char **argv)
++{
++	ARG_UNUSED(argc);
++	ARG_UNUSED(argv);
++	shell_print(sh, "enabled=%u len=%u hex=%s", covert_enabled ? 1U : 0U,
++			(unsigned int)covert_len, covert_hex);
++	return 0;
++}
++
++SHELL_STATIC_SUBCMD_SET_CREATE(phantom_cmds,
++	SHELL_CMD_ARG(conn_covert_hex, NULL, "Set runtime covert bytes as hex",
++			cmd_conn_covert_hex, 2, 0),
++	SHELL_CMD_ARG(conn_covert_clear, NULL, "Disable runtime covert bytes",
++			cmd_conn_covert_clear, 1, 0),
++	SHELL_CMD_ARG(conn_covert_status, NULL, "Show runtime covert state",
++			cmd_conn_covert_status, 1, 0),
++	SHELL_SUBCMD_SET_END
++);
++
++static int cmd_phantom(const struct shell *sh, size_t argc, char **argv)
++{
++	ARG_UNUSED(argc);
++	ARG_UNUSED(argv);
++	shell_help(sh);
++	return -ENOEXEC;
++}
++
++SHELL_CMD_ARG_REGISTER(phantom, &phantom_cmds,
++		       "PhantomChannel runtime controls", cmd_phantom, 1, 0);
++
+ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
+ 			 struct net_buf_simple *ad)
+ {
+@@ -436,8 +577,11 @@
+ 		write_value_handle = chrc->value_handle;
+ 		memset(params, 0, sizeof(*params));
+ 		set_state(CENTRAL_READY);
+-		printk("CENTRAL_READY handle=%u mtu=%u value_len=%u interval_ms=%u phy_required=%s\n",
+-		       write_value_handle, bt_gatt_get_mtu(conn), PHANTOM_WRITE_VALUE_LEN,
++		printk("CENTRAL_READY handle=%u mtu=%u max_value_len=%u covert_enabled=%u "
++		       "covert_len=%u interval_ms=%u phy_required=%s\n",
++		       write_value_handle, bt_gatt_get_mtu(conn),
++		       PHANTOM_MAX_WRITE_VALUE_LEN, covert_enabled ? 1U : 0U,
++		       (unsigned int)covert_len,
+ 		       CONFIG_PHANTOMCHANNEL_WRITE_INTERVAL_MS,
+ #if defined(CONFIG_PHANTOMCHANNEL_FORCE_2M) && CONFIG_PHANTOMCHANNEL_FORCE_2M
+ 		       "2M"
+@@ -534,6 +678,7 @@
+ 	}
+ 
+ 	printk("CENTRAL_CONNECTED addr=%s\n", addr_str);
++	log_active_channel_map(conn);
+ #if (defined(CONFIG_PHANTOMCHANNEL_FORCE_2M) && CONFIG_PHANTOMCHANNEL_FORCE_2M) || \
+ 	(defined(CONFIG_PHANTOMCHANNEL_FORCE_1M) && CONFIG_PHANTOMCHANNEL_FORCE_1M)
+ 	required_phy_ready = connection_is_required_phy(conn);
+@@ -622,6 +767,7 @@
+ {
+ 	struct bt_conn *conn = NULL;
+ 	uint16_t handle = 0U;
++	size_t write_len;
+ 	int err;
+ 	bool still_current;
+ 
+@@ -645,9 +791,11 @@
+ 		return;
+ 	}
+ 
+-	build_write_value(next_sequence);
++	k_mutex_lock(&state_mutex, K_FOREVER);
++	write_len = build_write_value(next_sequence);
++	k_mutex_unlock(&state_mutex);
+ 	err = bt_gatt_write_without_response(conn, handle, write_value,
+-					    sizeof(write_value), false);
++					    write_len, false);
+ 	if (err == 0) {
+ 		queued_count++;
+ 		next_sequence++;
+@@ -716,10 +864,12 @@
+ 		printk("CENTRAL_BT_ENABLE_ERR=%d\n", err);
+ 		return 0;
+ 	}
++	(void)configure_full_channel_map();
+ 
+-	printk("CENTRAL_INIT covert_len=%u frame_len=%u write_len=%u interval_ms=%u\n",
+-	       CONFIG_PHANTOMCHANNEL_COVERT_LEN, PHANTOM_FRAME_LEN,
+-	       PHANTOM_WRITE_VALUE_LEN, CONFIG_PHANTOMCHANNEL_WRITE_INTERVAL_MS);
++	printk("CENTRAL_INIT covert_enabled=0 max_covert_len=%u max_frame_len=%u "
++	       "max_write_len=%u interval_ms=%u\n",
++	       PHANTOM_MAX_COVERT_LEN, PHANTOM_MAX_FRAME_LEN,
++	       PHANTOM_MAX_WRITE_VALUE_LEN, CONFIG_PHANTOMCHANNEL_WRITE_INTERVAL_MS);
+ 
+ 	(void)k_work_reschedule(&stats_work, K_SECONDS(1));
+ 	(void)start_scan();
+--- a/samples/bluetooth/phantomchannel_central_gatt_write/prj.conf
++++ b/samples/bluetooth/phantomchannel_central_gatt_write/prj.conf
+@@ -38,6 +38,12 @@
+ CONFIG_UART_CONSOLE=y
+ CONFIG_LOG_BACKEND_UART=n
+ CONFIG_LOG_BACKEND_RTT=n
++CONFIG_SHELL=y
++CONFIG_SHELL_BACKEND_SERIAL=y
++CONFIG_SHELL_CMD_BUFF_SIZE=512
++CONFIG_SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE=512
++CONFIG_SHELL_BACKEND_SERIAL_TX_RING_BUFFER_SIZE=1024
++CONFIG_SHELL_BACKEND_SERIAL_CHECK_DTR=n
+ CONFIG_PHANTOMCHANNEL_TIMING_DEBUG=n
+ CONFIG_PHANTOMCHANNEL_LL_TX_DEBUG=n
+ 
+@@ -47,5 +47,5 @@
+ CONFIG_PHANTOMCHANNEL_CENTRAL_TX=y
+ CONFIG_PHANTOMCHANNEL_COVERT_LEN=0
+-CONFIG_PHANTOMCHANNEL_WRITE_INTERVAL_MS=20
++CONFIG_PHANTOMCHANNEL_WRITE_INTERVAL_MS=100
+ CONFIG_PHANTOMCHANNEL_DYNAMIC_TIMING=n
+ CONFIG_PHANTOMCHANNEL_RX_GUARD_US=0
+--- a/samples/bluetooth/phantomchannel_hrs_peripheral/src/main.c
++++ b/samples/bluetooth/phantomchannel_hrs_peripheral/src/main.c
+@@ -16,6 +16,8 @@
+ #include <zephyr/bluetooth/hci.h>
+ #include <zephyr/bluetooth/uuid.h>
+ #include <zephyr/kernel.h>
++#include <zephyr/net/buf.h>
++#include <zephyr/shell/shell.h>
+ #include <zephyr/sys/byteorder.h>
+ #include <zephyr/sys/printk.h>
+ 
+@@ -23,24 +25,17 @@
+ #define PHANTOM_MARKER_LEN 3U
+ #define PHANTOM_MAX_COVERT_LEN 240U
+ #define PHANTOM_NORMAL_PREFIX_LEN CONFIG_PHANTOMCHANNEL_NORMAL_PREFIX_LEN
+-#if IS_ENABLED(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX)
+-#define PHANTOM_COVERT_LEN CONFIG_PHANTOMCHANNEL_COVERT_LEN
+ #define PHANTOM_COVERT_MARKER_BYTE \
+ 	((uint8_t)CONFIG_PHANTOMCHANNEL_COVERT_MARKER_BYTE)
+-#define PHANTOM_FRAME_LEN (PHANTOM_FRAME_OVERHEAD + PHANTOM_COVERT_LEN)
+-#define PHANTOM_NOTIFY_LEN \
+-	(PHANTOM_NORMAL_PREFIX_LEN + PHANTOM_MARKER_LEN + PHANTOM_FRAME_LEN)
++#define PHANTOM_MAX_FRAME_LEN (PHANTOM_FRAME_OVERHEAD + PHANTOM_MAX_COVERT_LEN)
++#define PHANTOM_MAX_NOTIFY_LEN \
++	(PHANTOM_NORMAL_PREFIX_LEN + PHANTOM_MARKER_LEN + PHANTOM_MAX_FRAME_LEN)
+ #define PHANTOM_COVERT_LEN_VALUE ((unsigned int)CONFIG_PHANTOMCHANNEL_COVERT_LEN)
+-#else
+-#define PHANTOM_NOTIFY_LEN (PHANTOM_NORMAL_PREFIX_LEN)
+-#define PHANTOM_COVERT_LEN_VALUE 0U
+-#endif
+ 
+ BUILD_ASSERT(PHANTOM_NORMAL_PREFIX_LEN >= 2U);
+ #if IS_ENABLED(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX)
+-BUILD_ASSERT(PHANTOM_COVERT_LEN >= 1U);
+-BUILD_ASSERT(PHANTOM_COVERT_LEN <= PHANTOM_MAX_COVERT_LEN);
+-BUILD_ASSERT(PHANTOM_NOTIFY_LEN <= 248U);
++BUILD_ASSERT(CONFIG_PHANTOMCHANNEL_COVERT_LEN <= PHANTOM_MAX_COVERT_LEN);
++BUILD_ASSERT(PHANTOM_MAX_NOTIFY_LEN <= 251U);
+ #endif
+ 
+ static const struct bt_data ad[] = {
+@@ -61,15 +56,21 @@
+ static struct k_work_delayable advertising_work;
+ K_MUTEX_DEFINE(conn_mutex);
+ 
+-static uint8_t hrs_value[PHANTOM_NOTIFY_LEN];
++static uint8_t hrs_value[PHANTOM_MAX_NOTIFY_LEN];
+ #if IS_ENABLED(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX)
+-static uint8_t covert_payload[PHANTOM_COVERT_LEN];
+-static uint8_t covert_frame[PHANTOM_FRAME_LEN];
++static uint8_t covert_payload[PHANTOM_MAX_COVERT_LEN];
++static uint8_t covert_frame[PHANTOM_MAX_FRAME_LEN];
++static size_t covert_len;
++static bool covert_enabled;
++static char covert_hex[2U * PHANTOM_MAX_COVERT_LEN + 1U];
+ #endif
+ static uint32_t notify_attempts;
+ static uint32_t notify_ok;
+ static uint32_t notify_errors;
+ static int last_notify_error;
++static const uint8_t full_channel_map[5] = {
++	0xffU, 0xffU, 0xffU, 0xffU, 0x1fU
++};
+ 
+ static void ccc_changed(const struct bt_gatt_attr *attr, uint16_t value);
+ 
+@@ -81,14 +82,6 @@
+ );
+ 
+ #if IS_ENABLED(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX)
+-static void fill_covert_payload(void)
+-{
+-	covert_payload[0] = PHANTOM_COVERT_MARKER_BYTE;
+-	for (size_t i = 1U; i < sizeof(covert_payload); i++) {
+-		covert_payload[i] = (uint8_t)(((i - 1U) % 255U) + 1U);
+-	}
+-}
+-
+ static void build_covert_frame(uint16_t seq)
+ {
+ 	uint8_t check = 0U;
+@@ -96,17 +89,91 @@
+ 	covert_frame[0] = 0x50;
+ 	covert_frame[1] = 0x43;
+ 	sys_put_le16(seq, &covert_frame[2]);
+-	covert_frame[4] = (uint8_t)sizeof(covert_payload);
+-	memcpy(&covert_frame[5], covert_payload, sizeof(covert_payload));
++	covert_frame[4] = (uint8_t)covert_len;
++	memcpy(&covert_frame[5], covert_payload, covert_len);
+ 
+-	for (size_t i = 0U; i < sizeof(covert_frame) - 1U; i++) {
++	for (size_t i = 0U; i < PHANTOM_FRAME_OVERHEAD + covert_len - 1U; i++) {
+ 		check ^= covert_frame[i];
+ 	}
+-	covert_frame[sizeof(covert_frame) - 1U] = check;
++	covert_frame[PHANTOM_FRAME_OVERHEAD + covert_len - 1U] = check;
++}
++
++static void update_covert_hex(void)
++{
++	static const char digits[] = "0123456789abcdef";
++
++	for (size_t i = 0U; i < covert_len; i++) {
++		covert_hex[2U * i] = digits[covert_payload[i] >> 4];
++		covert_hex[2U * i + 1U] = digits[covert_payload[i] & 0x0fU];
++	}
++	covert_hex[2U * covert_len] = '\0';
+ }
++
++static int cmd_conn_covert_hex(const struct shell *sh, size_t argc, char **argv)
++{
++	size_t length;
++
++	ARG_UNUSED(argc);
++	length = hex2bin(argv[1], strlen(argv[1]), covert_payload,
++				PHANTOM_MAX_COVERT_LEN);
++	if (length == 0U || length > PHANTOM_MAX_COVERT_LEN ||
++		strlen(argv[1]) != length * 2U) {
++		shell_error(sh, "hex must contain 1..240 complete bytes");
++		return -EINVAL;
++	}
++	covert_len = length;
++	covert_enabled = true;
++	update_covert_hex();
++	printk("HRS_COVERT_ACK {\"len\":%u,\"hex\":\"%s\",\"status\":0}\n",
++	       (unsigned int)covert_len, covert_hex);
++	shell_print(sh, "HRS_COVERT_ACK len=%u", (unsigned int)covert_len);
++	return 0;
++}
++
++static int cmd_conn_covert_clear(const struct shell *sh, size_t argc, char **argv)
++{
++	ARG_UNUSED(argc);
++	ARG_UNUSED(argv);
++	covert_len = 0U;
++	covert_enabled = false;
++	covert_hex[0] = '\0';
++	printk("HRS_COVERT_ACK {\"len\":0,\"hex\":\"\",\"status\":0}\n");
++	shell_print(sh, "HRS_COVERT_ACK len=0");
++	return 0;
++}
++
++static int cmd_conn_covert_status(const struct shell *sh, size_t argc, char **argv)
++{
++	ARG_UNUSED(argc);
++	ARG_UNUSED(argv);
++	shell_print(sh, "enabled=%u len=%u hex=%s", covert_enabled ? 1U : 0U,
++			(unsigned int)covert_len, covert_hex);
++	return 0;
++}
++
++SHELL_STATIC_SUBCMD_SET_CREATE(phantom_cmds,
++	SHELL_CMD_ARG(conn_covert_hex, NULL, "Set runtime covert bytes as hex",
++			cmd_conn_covert_hex, 2, 0),
++	SHELL_CMD_ARG(conn_covert_clear, NULL, "Disable runtime covert bytes",
++			cmd_conn_covert_clear, 1, 0),
++	SHELL_CMD_ARG(conn_covert_status, NULL, "Show runtime covert state",
++			cmd_conn_covert_status, 1, 0),
++	SHELL_SUBCMD_SET_END
++);
++
++static int cmd_phantom(const struct shell *sh, size_t argc, char **argv)
++{
++	ARG_UNUSED(argc);
++	ARG_UNUSED(argv);
++	shell_help(sh);
++	return -ENOEXEC;
++}
++
++SHELL_CMD_ARG_REGISTER(phantom, &phantom_cmds,
++		       "PhantomChannel runtime controls", cmd_phantom, 1, 0);
+ #endif
+ 
+-static void build_hrs_value(uint16_t seq)
++static size_t build_hrs_value(uint16_t seq)
+ {
+ 	memset(hrs_value, 0, sizeof(hrs_value));
+ 	/* HRS flags: 8-bit heart rate, sensor contact supported and detected. */
+@@ -118,11 +185,18 @@
+ 		hrs_value[i] = 0U;
+ 	}
+ #if IS_ENABLED(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX)
++	if (!covert_enabled || covert_len == 0U) {
++		return PHANTOM_NORMAL_PREFIX_LEN;
++	}
+ 	hrs_value[PHANTOM_NORMAL_PREFIX_LEN + 0U] = 0xaaU;
+ 	hrs_value[PHANTOM_NORMAL_PREFIX_LEN + 1U] = 0xaaU;
+ 	hrs_value[PHANTOM_NORMAL_PREFIX_LEN + 2U] = 0x00U;
+ 	memcpy(&hrs_value[PHANTOM_NORMAL_PREFIX_LEN + PHANTOM_MARKER_LEN],
+-	       covert_frame, sizeof(covert_frame));
++	       covert_frame, PHANTOM_FRAME_OVERHEAD + covert_len);
++	return PHANTOM_NORMAL_PREFIX_LEN + PHANTOM_MARKER_LEN +
++	       PHANTOM_FRAME_OVERHEAD + covert_len;
++#else
++	return PHANTOM_NORMAL_PREFIX_LEN;
+ #endif
+ }
+ 
+@@ -145,6 +219,7 @@
+ {
+ 	struct bt_conn *conn = NULL;
+ 	uint16_t seq;
++	size_t notify_len;
+ 	int err;
+ 
+ 	ARG_UNUSED(work);
+@@ -164,13 +239,12 @@
+ 
+ 	seq = phantom_seq++;
+ #if IS_ENABLED(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX)
+-	fill_covert_payload();
+ 	build_covert_frame(seq);
+ #endif
+-	build_hrs_value(seq);
++	notify_len = build_hrs_value(seq);
+ 	notify_attempts++;
+ 	err = bt_gatt_notify(conn, &hrs_service.attrs[2], hrs_value,
+-			     sizeof(hrs_value));
++			     notify_len);
+ 	if (err == 0) {
+ 		notify_ok++;
+ 	} else {
+@@ -228,18 +302,52 @@
+ 
+ static int configure_low_band_channel_map(void)
+ {
+-	if (!IS_ENABLED(CONFIG_PHANTOMCHANNEL_LOW_BAND_CHAN_MAP)) {
+-		printk("HRS_CHAN_MAP {\"enabled\":0}\n");
+-		return 0;
+-	}
++	uint8_t chan_map[5];
++	int err;
+ 
+-	uint8_t chan_map[5] = { 0xffU, 0xffU, 0x01U, 0x00U, 0x00U };
+-	int err = bt_le_set_chan_map(chan_map);
++	memcpy(chan_map, full_channel_map, sizeof(chan_map));
++	err = bt_le_set_chan_map(chan_map);
+ 
+-	printk("HRS_CHAN_MAP {\"enabled\":1,\"status\":%d}\n", err);
++	printk("HRS_CHAN_MAP {\"enabled\":1,\"map\":\"ffffffff1f\",\"status\":%d}\n", err);
+ 	return err;
+ }
+ 
++static void log_active_channel_map(struct bt_conn *conn)
++{
++	struct bt_hci_cp_le_read_chan_map *cp;
++	struct bt_hci_rp_le_read_chan_map *rp;
++	struct net_buf *cmd;
++	struct net_buf *rsp = NULL;
++	uint16_t handle;
++	int err;
++
++	err = bt_hci_get_conn_handle(conn, &handle);
++	if (err != 0) {
++		printk("HRS_CHAN_MAP_READ {\"status\":%d}\n", err);
++		return;
++	}
++	cmd = bt_hci_cmd_create(BT_HCI_OP_LE_READ_CHAN_MAP, sizeof(*cp));
++	if (cmd == NULL) {
++		printk("HRS_CHAN_MAP_READ {\"status\":-ENOMEM}\n");
++		return;
++	}
++	cp = net_buf_add(cmd, sizeof(*cp));
++	cp->handle = sys_cpu_to_le16(handle);
++	err = bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_CHAN_MAP, cmd, &rsp);
++	if (err != 0 || rsp == NULL || rsp->len < sizeof(*rp)) {
++		printk("HRS_CHAN_MAP_READ {\"status\":%d}\n", err);
++		if (rsp != NULL) {
++			net_buf_unref(rsp);
++		}
++		return;
++	}
++	rp = (struct bt_hci_rp_le_read_chan_map *)rsp->data;
++	printk("HRS_CHAN_MAP_ACTIVE {\"status\":%u,\"map\":\"%02x%02x%02x%02x%02x\"}\n",
++	       rp->status, rp->ch_map[0], rp->ch_map[1], rp->ch_map[2],
++	       rp->ch_map[3], rp->ch_map[4]);
++	net_buf_unref(rsp);
++}
++
+ static int start_advertising(void)
+ {
+ 	struct bt_le_adv_param adv_param = *BT_LE_ADV_CONN_FAST_1;
+@@ -292,6 +400,7 @@
+ 	last_notify_error = 0;
+ 	printk("HRS_CONNECTED {\"peer\":\"%s\",\"timestamp_us\":%lld}\n",
+ 	       addr, k_uptime_get() * 1000LL);
++	log_active_channel_map(conn);
+ 	printk("HRS_CONN_PARAM_REQUEST {\"interval_min_us\":20000,"
+ 	       "\"interval_max_us\":20000,\"status\":%d}\n",
+ 	       bt_conn_le_param_update(conn, &fast_param));
+--- a/samples/bluetooth/phantomchannel_hrs_peripheral/prj.conf
++++ b/samples/bluetooth/phantomchannel_hrs_peripheral/prj.conf
+@@ -24,18 +24,22 @@
+ CONFIG_BT_L2CAP_TX_BUF_COUNT=20
+ CONFIG_BT_L2CAP_TX_FRAG_COUNT=0
+ 
+-# Phone rate tests must not block the BLE work queue on the DK UART.  The
+-# application diagnostics use the non-blocking RTT console instead.
++# The runtime covert-data command is exposed on the DK UART.  The capture
++# harness records the same UART stream for ACK and connection evidence.
+ CONFIG_LOG=n
+ CONFIG_CONSOLE=y
+ CONFIG_PRINTK=y
+-CONFIG_USE_SEGGER_RTT=y
+-CONFIG_RTT_CONSOLE=y
+-CONFIG_UART_CONSOLE=n
++CONFIG_USE_SEGGER_RTT=n
++CONFIG_RTT_CONSOLE=n
++CONFIG_UART_CONSOLE=y
+ CONFIG_LOG_BACKEND_UART=n
+ CONFIG_LOG_BACKEND_RTT=n
+-CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=131072
+-CONFIG_SEGGER_RTT_MODE_NO_BLOCK_SKIP=y
++CONFIG_SHELL=y
++CONFIG_SHELL_BACKEND_SERIAL=y
++CONFIG_SHELL_CMD_BUFF_SIZE=512
++CONFIG_SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE=512
++CONFIG_SHELL_BACKEND_SERIAL_TX_RING_BUFFER_SIZE=1024
++CONFIG_SHELL_BACKEND_SERIAL_CHECK_DTR=n
+ 
+ # The HRS GATT service is defined by this sample; do not enable CONFIG_BT_HRS.
+ CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX=y
+@@ -45,5 +49,5 @@
+ CONFIG_PHANTOMCHANNEL_NOTIFY_INTERVAL_MS=20
+ CONFIG_PHANTOMCHANNEL_NORMAL_PREFIX_LEN=2
+ CONFIG_PHANTOMCHANNEL_STATIC_ADDRESS="C0:DE:52:84:00:03"
+-CONFIG_PHANTOMCHANNEL_LOW_BAND_CHAN_MAP=n
++CONFIG_PHANTOMCHANNEL_LOW_BAND_CHAN_MAP=y
+ CONFIG_BT_CTLR_CHAN_SEL_2=n
+--- a/samples/bluetooth/phantomchannel_pip_hrs_central_52833/src/main.c
++++ b/samples/bluetooth/phantomchannel_pip_hrs_central_52833/src/main.c
+@@ -17,6 +17,8 @@
+ #include <zephyr/bluetooth/hci.h>
+ #include <zephyr/bluetooth/uuid.h>
+ #include <zephyr/kernel.h>
++#include <zephyr/net/buf.h>
++#include <zephyr/sys/byteorder.h>
+ #include <zephyr/sys/printk.h>
+ 
+ static struct bt_conn *default_conn;
+@@ -39,6 +41,52 @@
+ 
+ static void start_discovery(struct bt_conn *conn);
+ 
++static int configure_full_channel_map(void)
++{
++	uint8_t chan_map[5] = { 0xffU, 0xffU, 0xffU, 0xffU, 0x1fU };
++	int err = bt_le_set_chan_map(chan_map);
++
++	printk("HRS_CHAN_MAP {\"enabled\":1,\"map\":\"ffffffff1f\","
++	       "\"status\":%d}\n", err);
++	return err;
++}
++
++static void log_active_channel_map(struct bt_conn *conn)
++{
++	struct bt_hci_cp_le_read_chan_map *cp;
++	struct bt_hci_rp_le_read_chan_map *rp;
++	struct net_buf *cmd;
++	struct net_buf *rsp = NULL;
++	uint16_t handle;
++	int err;
++
++	err = bt_hci_get_conn_handle(conn, &handle);
++	if (err != 0) {
++		printk("HRS_CHAN_MAP_READ {\"status\":%d}\n", err);
++		return;
++	}
++	cmd = bt_hci_cmd_create(BT_HCI_OP_LE_READ_CHAN_MAP, sizeof(*cp));
++	if (cmd == NULL) {
++		printk("HRS_CHAN_MAP_READ {\"status\":-ENOMEM}\n");
++		return;
++	}
++	cp = net_buf_add(cmd, sizeof(*cp));
++	cp->handle = sys_cpu_to_le16(handle);
++	err = bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_CHAN_MAP, cmd, &rsp);
++	if (err != 0 || rsp == NULL || rsp->len < sizeof(*rp)) {
++		printk("HRS_CHAN_MAP_READ {\"status\":%d}\n", err);
++		if (rsp != NULL) {
++			net_buf_unref(rsp);
++		}
++		return;
++	}
++	rp = (struct bt_hci_rp_le_read_chan_map *)rsp->data;
++	printk("HRS_CHAN_MAP_ACTIVE {\"status\":%u,\"map\":\"%02x%02x%02x%02x%02x\"}\n",
++	       rp->status, rp->ch_map[0], rp->ch_map[1], rp->ch_map[2],
++	       rp->ch_map[3], rp->ch_map[4]);
++	net_buf_unref(rsp);
++}
++
+ static uint8_t hrs_notify_func(struct bt_conn *conn,
+ 				       struct bt_gatt_subscribe_params *params,
+ 				       const void *data, uint16_t length)
+@@ -283,6 +331,7 @@
+ 	}
+ 	printk("HRS_CONNECTED {\"status\":0,\"peer\":\"%s\","
+ 	       "\"pairing\":0,\"bonding\":0,\"encryption\":0}\n", peer);
++	log_active_channel_map(conn);
+ 	if (bt_conn_get_info(conn, &info) == 0 && info.type == BT_CONN_TYPE_LE) {
+ 		printk("HRS_PHY {\"tx_phy\":%u,\"rx_phy\":%u,\"interval_ms\":%u}\n",
+ 		       info.le.phy != NULL ? info.le.phy->tx_phy : 0U,
+@@ -349,6 +398,7 @@
+ 	if (err != 0) {
+ 		return 0;
+ 	}
++	(void)configure_full_channel_map();
+ 	k_work_init_delayable(&stats_work, stats_work_handler);
+ 	(void)k_work_reschedule(&stats_work,
+ 				K_MSEC(CONFIG_PHANTOMCHANNEL_HRS_STATS_INTERVAL_MS));
+--- a/samples/bluetooth/phantomchannel_sink_52833/src/main.c
++++ b/samples/bluetooth/phantomchannel_sink_52833/src/main.c
+@@ -18,6 +18,7 @@
+ #include <zephyr/bluetooth/hci.h>
+ #include <zephyr/bluetooth/uuid.h>
+ #include <zephyr/kernel.h>
++#include <zephyr/net/buf.h>
+ #include <zephyr/sys/byteorder.h>
+ #include <zephyr/sys/printk.h>
+ #include <zephyr/sys/util.h>
+@@ -66,6 +67,42 @@
+ static uint8_t last_error;
+ static bool have_sequence;
+ 
++static void log_active_channel_map(struct bt_conn *conn)
++{
++	struct bt_hci_cp_le_read_chan_map *cp;
++	struct bt_hci_rp_le_read_chan_map *rp;
++	struct net_buf *cmd;
++	struct net_buf *rsp = NULL;
++	uint16_t handle;
++	int err;
++
++	err = bt_hci_get_conn_handle(conn, &handle);
++	if (err != 0) {
++		printk("SINK_CHAN_MAP_READ {\"status\":%d}\n", err);
++		return;
++	}
++	cmd = bt_hci_cmd_create(BT_HCI_OP_LE_READ_CHAN_MAP, sizeof(*cp));
++	if (cmd == NULL) {
++		printk("SINK_CHAN_MAP_READ {\"status\":-ENOMEM}\n");
++		return;
++	}
++	cp = net_buf_add(cmd, sizeof(*cp));
++	cp->handle = sys_cpu_to_le16(handle);
++	err = bt_hci_cmd_send_sync(BT_HCI_OP_LE_READ_CHAN_MAP, cmd, &rsp);
++	if (err != 0 || rsp == NULL || rsp->len < sizeof(*rp)) {
++		printk("SINK_CHAN_MAP_READ {\"status\":%d}\n", err);
++		if (rsp != NULL) {
++			net_buf_unref(rsp);
++		}
++		return;
++	}
++	rp = (struct bt_hci_rp_le_read_chan_map *)rsp->data;
++	printk("SINK_CHAN_MAP_ACTIVE {\"status\":%u,\"map\":\"%02x%02x%02x%02x%02x\"}\n",
++	       rp->status, rp->ch_map[0], rp->ch_map[1], rp->ch_map[2],
++	       rp->ch_map[3], rp->ch_map[4]);
++	net_buf_unref(rsp);
++}
++
+ static const struct bt_data ad[] = {
+ 	BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR),
+ 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PHANTOM_SERVICE_UUID),
+@@ -351,6 +388,7 @@
+ 	k_mutex_unlock(&state_mutex);
+ 	reset_connection_counters();
+ 	log_connection_info("CONNECTED", conn);
++	log_active_channel_map(conn);
+ 	printk("SINK_CONN_PARAM_REQUEST skipped=central_requested interval_ms=20 "
+ 	       "timeout_ms=4000\n");
+ }

@@ -1,0 +1,241 @@
+diff --git a/samples/bluetooth/phantomchannel_hrs_peripheral/prj.conf b/samples/bluetooth/phantomchannel_hrs_peripheral/prj.conf
+index e2a381ae578..0f6583f9aa3 100644
+--- a/samples/bluetooth/phantomchannel_hrs_peripheral/prj.conf
++++ b/samples/bluetooth/phantomchannel_hrs_peripheral/prj.conf
+@@ -24,6 +24,10 @@ CONFIG_BT_L2CAP_TX_MTU=255
+ CONFIG_BT_L2CAP_TX_BUF_COUNT=20
+ CONFIG_BT_L2CAP_TX_FRAG_COUNT=0
+ 
++CONFIG_BT_SMP=y
++CONFIG_BT_SETTINGS=n
++CONFIG_BT_BONDABLE=n
++
+ # Phone rate tests must not block the BLE work queue on the DK UART.  The
+ # application diagnostics use the non-blocking RTT console instead.
+ CONFIG_LOG=n
+diff --git a/samples/bluetooth/phantomchannel_hrs_peripheral/src/main.c b/samples/bluetooth/phantomchannel_hrs_peripheral/src/main.c
+index fd51025cc87..4d651346443 100644
+--- a/samples/bluetooth/phantomchannel_hrs_peripheral/src/main.c
++++ b/samples/bluetooth/phantomchannel_hrs_peripheral/src/main.c
+@@ -55,6 +55,7 @@ static const struct bt_data sd[] = {
+ 
+ static struct bt_conn *current_conn;
+ static bool notify_enabled;
++static bool security_ready;
+ static uint16_t phantom_seq;
+ static uint8_t identity_id = BT_ID_DEFAULT;
+ static struct k_work_delayable notify_work;
+@@ -190,8 +191,10 @@ static void ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
+ 	notify_enabled = (value == BT_GATT_CCC_NOTIFY);
+ 	printk("HRS_CCC {\"notify\":%u,\"timestamp_us\":%lld}\n",
+ 	       notify_enabled ? 1U : 0U, k_uptime_get() * 1000LL);
+-	if (notify_enabled) {
++	if (notify_enabled && security_ready) {
+ 		schedule_notification();
++	} else if (notify_enabled) {
++		printk("HRS_SECURITY_WAIT {\"reason\":\"ccc_before_encryption\"}\n");
+ 	} else {
+ 		k_work_cancel_delayable(&notify_work);
+ 	}
+@@ -286,6 +289,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
+ 	k_mutex_unlock(&conn_mutex);
+ 
+ 	phantom_seq = 0U;
++	security_ready = false;
+ 	notify_attempts = 0U;
+ 	notify_ok = 0U;
+ 	notify_errors = 0U;
+@@ -297,6 +301,27 @@ static void connected(struct bt_conn *conn, uint8_t err)
+ 	       bt_conn_le_param_update(conn, &fast_param));
+ }
+ 
++static void security_changed(struct bt_conn *conn, bt_security_t level,
++			     enum bt_security_err err)
++{
++	bool start_notifications;
++
++	security_ready = (err == 0 && level >= BT_SECURITY_L2);
++	printk("HRS_SECURITY_CHANGED {\"level\":%u,\"error\":%d,"
++	       "\"error_text\":\"%s\",\"encrypted\":%u}\n",
++	       level, err, bt_security_err_to_str(err),
++	       security_ready ? 1U : 0U);
++	if (!security_ready) {
++		k_work_cancel_delayable(&notify_work);
++		return;
++	}
++
++	start_notifications = notify_enabled;
++	if (start_notifications) {
++		schedule_notification();
++	}
++}
++
+ static void disconnected(struct bt_conn *conn, uint8_t reason)
+ {
+ 	char addr[BT_ADDR_LE_STR_LEN];
+@@ -305,6 +330,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
+ 	printk("HRS_DISCONNECTED {\"peer\":\"%s\",\"reason\":%u}\n",
+ 	       addr, reason);
+ 	notify_enabled = false;
++	security_ready = false;
+ 	k_work_cancel_delayable(&notify_work);
+ 
+ 	k_mutex_lock(&conn_mutex, K_FOREVER);
+@@ -319,6 +345,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
+ BT_CONN_CB_DEFINE(conn_callbacks) = {
+ 	.connected = connected,
+ 	.disconnected = disconnected,
++	.security_changed = security_changed,
+ };
+ 
+ int main(void)
+diff --git a/subsys/bluetooth/controller/ll_sw/nordic/lll/lll_conn.c b/subsys/bluetooth/controller/ll_sw/nordic/lll/lll_conn.c
+index 6b12f09d8dc..42dd3b0dafc 100644
+--- a/subsys/bluetooth/controller/ll_sw/nordic/lll/lll_conn.c
++++ b/subsys/bluetooth/controller/ll_sw/nordic/lll/lll_conn.c
+@@ -2963,6 +2963,7 @@ void lll_conn_tx_pkt_set(struct lll_conn *lll, struct pdu_data *pdu_data_tx)
+ 	struct pdu_data *pdu_data_tx_cp = NULL;
+ 	struct lll_conn_phantom_timing timing;
+ 	bool phantom_tx_enabled;
++	bool phantom_encrypted_ready = false;
+ 	bool phantom_marker_found = false;
+ 	bool phantom_central_runtime_tail = false;
+ 	uint16_t phantom_central_runtime_static_len = 0U;
+@@ -3130,30 +3131,65 @@ void lll_conn_tx_pkt_set(struct lll_conn *lll, struct pdu_data *pdu_data_tx)
+ 		LL_ASSERT(pdu_data_tx_cp);
+ 	
+ 		((uint8_t *)&pdu_data_tx_cp[0])[0] = ((uint8_t *)&pdu_data_tx[0])[0];
+-		pdu_data_tx_cp->len = flag_pos;
++		uint16_t legal_len = flag_pos;
++		pdu_data_tx_cp->len = (uint8_t)legal_len;
+ 		pdu_data_tx_cp->lldata[0] = pdu_data_tx_cp->len - 4;
+ 
++		/* Encrypt only the legal inner PDU.  The CCM output contains the
++		 * ciphertext and MIC; the software CRC and covert tail remain outside
++		 * CCM and are appended after the hardware operation completes. */
++#if defined(CONFIG_BT_CTLR_LE_ENC)
++		if (lll->enc_tx && is_data && lll->role == BT_HCI_ROLE_PERIPHERAL) {
++			struct pdu_data *encrypted_pdu;
++			uint16_t encrypted_len;
++
++			/* The connection counter is advanced only by the ACK/dequeue path;
++			 * retransmissions therefore reuse the same CCM counter. */
++			radio_pkt_configure(RADIO_PKT_CONF_LENGTH_8BIT,
++					    (uint8_t)(max_tx_octets + PDU_MIC_SIZE),
++					    pkt_flags);
++			encrypted_pdu = (struct pdu_data *)radio_ccm_tx_pkt_set(
++				&lll->ccm_tx, pdu_data_tx_cp);
++			if (!radio_ccm_is_done()) {
++				pdu_data_tx_cp = NULL;
++				goto phantom_tx_done;
++			}
++
++			encrypted_len = encrypted_pdu->len;
++			if (encrypted_len != legal_len + PDU_MIC_SIZE ||
++			    encrypted_len > max_tx_octets + PDU_MIC_SIZE) {
++				pdu_data_tx_cp = NULL;
++				goto phantom_tx_done;
++			}
++			memcpy(pdu_data_tx_cp, encrypted_pdu,
++			       PDU_DC_LL_HEADER_SIZE + encrypted_len);
++			pdu_data_tx_cp->len = (uint8_t)encrypted_len;
++			legal_len = encrypted_len;
++			phantom_encrypted_ready = true;
++		}
++#endif /* CONFIG_BT_CTLR_LE_ENC */
++
+ 		crc_buf[0] = (pdu_data_tx_cp->ll_id & 0x03) 	  | // bits 0-1: ll_id
+ 					((pdu_data_tx_cp->nesn & 0x01) << 2) |  // bit 2: nesn
+ 					((pdu_data_tx_cp->sn & 0x01) << 3)   |  // bit 3: sn
+ 					((pdu_data_tx_cp->md & 0x01) << 4)   |  // bit 4: md;    
+ 					((pdu_data_tx_cp->rfu & 0x07) << 5);   // bit 5: rfu                   
+-		crc_buf[1] = pdu_data_tx_cp->len;                     // len
+-		memcpy(&crc_buf[2], pdu_data_tx_cp->lldata, pdu_data_tx_cp->len); // payload (skip octet3
++		crc_buf[1] = (uint8_t)legal_len;                       // len
++		memcpy(&crc_buf[2], pdu_data_tx_cp->lldata, legal_len); // payload (skip octet3
+ 
+ 		uint32_t crc_data = ble_crc24_optimized(crc_buf, crc_buf[1]+2, lll->crc_init);
+ 		uint8_t crc0 = bit_reverse8((crc_data >> 16) & 0xFF);
+ 		uint8_t crc1 = bit_reverse8((crc_data >> 8) & 0xFF);
+ 		uint8_t crc2 = bit_reverse8(crc_data & 0xFF);
+ 
+-		pdu_data_tx_cp->lldata[flag_pos + 0] = crc0;
+-		pdu_data_tx_cp->lldata[flag_pos + 1] = crc1;
+-		pdu_data_tx_cp->lldata[flag_pos + 2] = crc2;
++		pdu_data_tx_cp->lldata[legal_len + 0U] = crc0;
++		pdu_data_tx_cp->lldata[legal_len + 1U] = crc1;
++		pdu_data_tx_cp->lldata[legal_len + 2U] = crc2;
+ 
+ 		if (is_data) {
+ 			if (phantom_central_runtime_tail) {
+ 				covert_len = phantom_central_frame_build(
+-					&pdu_data_tx_cp->lldata[flag_pos + 3U],
++					&pdu_data_tx_cp->lldata[legal_len + 3U],
+ 					PHANTOM_CENTRAL_MAX_FRAME_LEN);
+ 				if (covert_len == 0U) {
+ 					pdu_data_tx_cp = NULL;
+@@ -3175,22 +3211,22 @@ void lll_conn_tx_pkt_set(struct lll_conn *lll, struct pdu_data *pdu_data_tx)
+ 				phantom_counters.central_runtime_built++;
+ 				#endif
+ 			} else {
+-				memcpy(&pdu_data_tx_cp->lldata[flag_pos + 3],
++				memcpy(&pdu_data_tx_cp->lldata[legal_len + 3U],
+ 				       &pdu_data_tx->lldata[flag_pos + 3], covert_len);
+ 			}
+ 			#if defined(CONFIG_PHANTOMCHANNEL_PERIPHERAL_TX) || \
+ 				(defined(CONFIG_PHANTOMCHANNEL_LL_TX_DEBUG) && CONFIG_PHANTOMCHANNEL_LL_TX_DEBUG)
+ 			if (covert_len >= 6U &&
+-			    pdu_data_tx_cp->lldata[flag_pos + 3] == 0x50 &&
+-			    pdu_data_tx_cp->lldata[flag_pos + 4] == 0x43) {
++			    pdu_data_tx_cp->lldata[legal_len + 3U] == 0x50 &&
++			    pdu_data_tx_cp->lldata[legal_len + 4U] == 0x43) {
+ 				uint16_t phantom_seq =
+-					(uint16_t)pdu_data_tx_cp->lldata[flag_pos + 5] |
+-					((uint16_t)pdu_data_tx_cp->lldata[flag_pos + 6] << 8);
++					(uint16_t)pdu_data_tx_cp->lldata[legal_len + 5U] |
++					((uint16_t)pdu_data_tx_cp->lldata[legal_len + 6U] << 8);
+ 				uint8_t phantom_payload_len =
+-					pdu_data_tx_cp->lldata[flag_pos + 7];
++					pdu_data_tx_cp->lldata[legal_len + 7U];
+ 				uint8_t phantom_marker =
+ 					(phantom_payload_len > 0U) ?
+-					pdu_data_tx_cp->lldata[flag_pos + 8] : 0U;
++					pdu_data_tx_cp->lldata[legal_len + 8U] : 0U;
+ 
+ 				phantom_ll_tx_log_enqueue(phantom_seq, cur_data_chan_use,
+ 							  lll->access_addr,
+@@ -3221,12 +3257,15 @@ void lll_conn_tx_pkt_set(struct lll_conn *lll, struct pdu_data *pdu_data_tx)
+ 		}
+ 	
+ 		radio_crc_disable(0UL);
+-		radio_pkt_configure(RADIO_PKT_CONF_LENGTH_8BIT, 254, pkt_flags);
++		uint16_t physical_max_len = phantom_encrypted_ready ?
++			(max_tx_octets + PDU_MIC_SIZE) : 254U;
++		radio_pkt_configure(RADIO_PKT_CONF_LENGTH_8BIT,
++				    (uint8_t)physical_max_len, pkt_flags);
+ 
+ 		NRF_RADIO->PCNF1 &= ~(RADIO_PCNF1_MAXLEN_Msk | RADIO_PCNF1_STATLEN_Msk |
+ 					RADIO_PCNF1_BALEN_Msk | RADIO_PCNF1_ENDIAN_Msk);
+ 		NRF_RADIO->PCNF1 |=
+-			((((uint32_t)(254)) << RADIO_PCNF1_MAXLEN_Pos) & RADIO_PCNF1_MAXLEN_Msk) |
++			((((uint32_t)physical_max_len) << RADIO_PCNF1_MAXLEN_Pos) & RADIO_PCNF1_MAXLEN_Msk) |
+ 			((((uint32_t)(phantom_central_runtime_tail ?
+ 				phantom_central_runtime_static_len : (3U + covert_len)))
+ 				<< RADIO_PCNF1_STATLEN_Pos) & RADIO_PCNF1_STATLEN_Msk) |
+@@ -3496,9 +3535,13 @@ phantom_tx_done:
+ 	if (0) {
+ #if defined(CONFIG_BT_CTLR_LE_ENC)
+ 	} else if (lll->enc_tx) {
+-		radio_pkt_configure(RADIO_PKT_CONF_LENGTH_8BIT, (max_tx_octets + PDU_MIC_SIZE),
+-				    pkt_flags);
+-		if(covert_done){
++		if (!phantom_encrypted_ready) {
++			radio_pkt_configure(RADIO_PKT_CONF_LENGTH_8BIT,
++					    (max_tx_octets + PDU_MIC_SIZE), pkt_flags);
++		}
++		if (phantom_encrypted_ready) {
++			radio_pkt_tx_set(pdu_data_tx_cp);
++		} else if(covert_done){
+ 			radio_pkt_tx_set(radio_ccm_tx_pkt_set(&lll->ccm_tx, pdu_data_tx_cp));
+ 		}else{
+ 			radio_pkt_tx_set(radio_ccm_tx_pkt_set(&lll->ccm_tx, pdu_data_tx));

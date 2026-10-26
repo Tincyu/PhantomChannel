@@ -7200,6 +7200,7 @@ index 8334f35ebf8..7977a8f7944 100644
 +
 +	uint8_t aa_covert_len = (uint8_t)(copy_len - flag_pos);
 +	uint8_t covert_len = aa_covert_len - 2U;
++	bool append_tail = chan == 0x03U || IS_ENABLED(CONFIG_PHANTOMCHANNEL_ADV_EMBED_EVERY);
 +
 +	/* Shrink the BLE link-layer payload length to the bytes before the marker. */
 +	pdu_chg[1] = (uint8_t)(flag_pos - 2U);
@@ -7220,27 +7221,30 @@ index 8334f35ebf8..7977a8f7944 100644
 +		ad_off = (uint8_t)ad_end;
 +	}
 +
-+	static const uint8_t crc_init[4] = {0x55, 0x55, 0x55, 0x00};
-+	uint32_t crc_data = cal_crc_adv(pdu_chg, crc_init);
-+	uint8_t crc0 = bit_reverse8((crc_data >> 16) & 0xFF);
-+	uint8_t crc1 = bit_reverse8((crc_data >> 8) & 0xFF);
-+	uint8_t crc2 = bit_reverse8(crc_data & 0xFF);
-+
-+	pdu_chg[flag_pos + 0U] = crc0;
-+	pdu_chg[flag_pos + 1U] = crc1;
-+	pdu_chg[flag_pos + 2U] = crc2;
-+
 +	uint8_t statlen = 0U;
-+	if (chan == 0x03U || IS_ENABLED(CONFIG_PHANTOMCHANNEL_ADV_EMBED_EVERY)) {
++	if (append_tail) {
 +		/* Advertising channel 39 only: move the bytes after the marker
 +		 * to after the CRC.  In the append-every stress mode the same
 +		 * operation is intentionally applied to channels 37 and 38.
 +		 */
++		static const uint8_t crc_init[4] = {0x55, 0x55, 0x55, 0x00};
++		uint32_t crc_data = cal_crc_adv(pdu_chg, crc_init);
++		uint8_t crc0 = bit_reverse8((crc_data >> 16) & 0xFF);
++		uint8_t crc1 = bit_reverse8((crc_data >> 8) & 0xFF);
++		uint8_t crc2 = bit_reverse8(crc_data & 0xFF);
++
++		pdu_chg[flag_pos + 0U] = crc0;
++		pdu_chg[flag_pos + 1U] = crc1;
++		pdu_chg[flag_pos + 2U] = crc2;
 +		memcpy(&pdu_chg[flag_pos + 3U], pdu_src + flag_pos + 2U, covert_len);
 +		statlen = 3U + covert_len;
 +	}
 +
 +	radio_pkt_tx_set(pdu_chg);
++	if (!append_tail) {
++		/* Channels 37/38 use the normal controller hardware CRC. */
++		return true;
++	}
 +	radio_crc_disable(0UL);
 +	radio_pkt_configure(RADIO_PKT_CONF_LENGTH_8BIT, 254,
 +			    RADIO_PKT_CONF_PHY(RADIO_PKT_CONF_PHY_LEGACY));

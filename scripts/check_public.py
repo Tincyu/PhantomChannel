@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import subprocess
 import hashlib
+import json
 from pathlib import Path
 
 
@@ -25,6 +26,18 @@ MAX_GIT_VISIBLE_FILES = 5_000
 PRIVATE_PATH = re.compile(r"/(?:home/|srv/embedded-lab/|media/|opt/uhd-)")
 DEVICE_ID = re.compile(r"\b(?:001050[0-9]{6}|U[0-9]{6})\b")
 SECRET = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bAKIA[0-9A-Z]{16}\b")
+
+
+def is_release_firmware(rel: Path) -> bool:
+    if rel.parent != Path("firmware/images"):
+        return False
+    manifest = ROOT / "firmware/images/MANIFEST.json"
+    try:
+        images = json.loads(manifest.read_text(encoding="utf-8"))["images"]
+        entry = next(item for item in images if item["file"] == rel.name)
+        return hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() == entry["sha256"]
+    except (OSError, ValueError, KeyError, StopIteration, TypeError):
+        return False
 
 
 def git_paths() -> list[Path]:
@@ -49,7 +62,12 @@ def check() -> list[str]:
             continue
         regular_files += 1
         total_bytes += path.stat().st_size
-        if rel.name == "local.env" or path.suffix.lower() in FORBIDDEN_SUFFIXES:
+        if rel.parent == Path("firmware/images") and path.suffix.lower() in {".hex", ".bin", ".elf", ".img"}:
+            if not is_release_firmware(rel):
+                problems.append(f"{rel}: missing or mismatched firmware manifest entry")
+        if rel.name == "local.env" or (
+            path.suffix.lower() in FORBIDDEN_SUFFIXES and not is_release_firmware(rel)
+        ):
             problems.append(f"{rel}: private/generated file type")
         if path.stat().st_size > MAX_FILE_BYTES:
             problems.append(f"{rel}: exceeds {MAX_FILE_BYTES} bytes")

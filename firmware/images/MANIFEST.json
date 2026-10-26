@@ -1,0 +1,147 @@
+{
+  "schema_version": 2,
+  "image_format": "mixed platform release images",
+  "source": "firmware/ platform bundle",
+  "images": [
+    {
+      "file": "nrf52840-peripheral-direct-tail-231b-plain.hex",
+      "platform": "nrf52840",
+      "board": "nrf52840dk/nrf52840",
+      "role": "peripheral",
+      "strategy": "direct-tail",
+      "covert_bytes": 231,
+      "encrypted_link": false,
+      "sha256": "c40a6c529e8a82474862007f01b46f5246973cd2ab7a7525f8a813c0efc549cf"
+    },
+    {
+      "file": "nrf52840-peripheral-direct-tail-231b-encrypted.hex",
+      "platform": "nrf52840",
+      "board": "nrf52840dk/nrf52840",
+      "role": "peripheral",
+      "strategy": "direct-tail",
+      "covert_bytes": 231,
+      "encrypted_link": true,
+      "sha256": "f194bf5acaa14c5fc525be0451dbc1a571790bf0f07363496e01f3a8309d4565"
+    },
+    {
+      "file": "nrf52840-peripheral-pip-200b-plain.hex",
+      "platform": "nrf52840",
+      "board": "nrf52840dk/nrf52840",
+      "role": "peripheral",
+      "strategy": "pip",
+      "covert_bytes": 200,
+      "encrypted_link": false,
+      "sha256": "405926487eaad91cae0dd4295a5b823c177422c150fd505492160b0081751907"
+    },
+    {
+      "file": "nrf52840-central-runtime-tail-8b-plain.hex",
+      "platform": "nrf52840",
+      "board": "nrf52840dk/nrf52840",
+      "role": "central",
+      "strategy": "controller-owned-runtime-tail",
+      "covert_bytes": "runtime",
+      "encrypted_link": false,
+      "sha256": "3c6bb2974f8298271f1336b1a5d8a07cf22151d3b969018cdc9c3d1998aec6ab"
+    },
+    {
+      "file": "nrf52833-hrs-central-231b-plain.hex",
+      "platform": "nrf52833",
+      "board": "nrf52833dk/nrf52833",
+      "role": "central",
+      "strategy": "ordinary-hrs-sink",
+      "covert_bytes": 231,
+      "encrypted_link": false,
+      "sha256": "585c5e3358ef68eed3cd4335b5a223da645ce062949419f22f50bdef3686f08b"
+    },
+    {
+      "file": "nrf52833-hrs-central-231b-encrypted.hex",
+      "platform": "nrf52833",
+      "board": "nrf52833dk/nrf52833",
+      "role": "central",
+      "strategy": "ordinary-hrs-sink",
+      "covert_bytes": 231,
+      "encrypted_link": true,
+      "sha256": "a08929c4a4517b888075cb9f7901f2323caa225394eb2142bf523ef38eb81b35"
+    },
+    {
+      "file": "nrf52833-pip-central-200b-plain.hex",
+      "platform": "nrf52833",
+      "board": "nrf52833dk/nrf52833",
+      "role": "central",
+      "strategy": "pip",
+      "covert_bytes": 200,
+      "encrypted_link": false,
+      "sha256": "51e3be94e72f48ed046586a433536f3de364fc249ca0108b08740dd55f5903e2"
+    },
+    {
+      "file": "nrf52833-sink-plain.hex",
+      "platform": "nrf52833",
+      "board": "nrf52833dk/nrf52833",
+      "role": "central",
+      "strategy": "fixed-address-sink",
+      "covert_bytes": "none",
+      "encrypted_link": false,
+      "sha256": "95a8412a35abbd8e209ded040474e6aab0ea856da563ec17e4ce9634bf5b17cb"
+    },
+    {
+      "file": "da14695-blehr-pip-8b.img",
+      "platform": "da14695",
+      "board": "DA14695 DK",
+      "role": "PIP/HRS transmitter",
+      "strategy": "pip",
+      "covert_bytes": 8,
+      "encrypted_link": false,
+      "sha256": "f91bd58d910bebe5c3e5c71196c93332e1531ee7837fc1496c75f56e3a329801"
+    },
+    {
+      "file": "efr32mg24-railtest-adv-tail-239b.hex",
+      "platform": "efr32mg24",
+      "board": "EFR32MG24 BRD2703A",
+      "role": "advertising transmitter",
+      "strategy": "direct-tail",
+      "covert_bytes": 239,
+      "encrypted_link": false,
+      "sha256": "83fc7b9cc44800ded9a0a9e446ef079959925ef4e466633a647011bfb00b3cc6"
+    },
+    {
+      "file": "cc2340r5-basic-ble-dynamic-tail-239b.hex",
+      "platform": "cc2340r5",
+      "board": "CC2340R5",
+      "role": "advertising transmitter",
+      "strategy": "direct-tail",
+      "covert_bytes": 239,
+      "encrypted_link": false,
+      "sha256": "fcfafca3bab281dd09b1d106ed3080d6cdb2823bb0dd9d09237b01a4cb2fcf92"
+    },
+    {
+      "file": "sx1280-gatt-counter-direct-tail.hex",
+      "platform": "sx1280",
+      "board": "STM32L476RG + SX1280",
+      "role": "advertising transmitter",
+      "strategy": "direct-tail",
+      "covert_bytes": "runtime",
+      "encrypted_link": false,
+      "sha256": "99b3a22dcb9d54864367ea34a9d4918329798b5c364b0304e0fe839f532c9b96"
+    },
+    {
+      "file": "sx1280-gatt-counter-direct-tail.bin",
+      "platform": "sx1280",
+      "board": "STM32L476RG + SX1280",
+      "role": "advertising transmitter",
+      "strategy": "direct-tail",
+      "covert_bytes": "runtime",
+      "encrypted_link": false,
+      "sha256": "e4a335390e93a3c15cac811a2fef5962af70ff60607a4da0a180a90471b68c9b"
+    },
+    {
+      "file": "sx1280-gatt-counter-direct-tail.elf",
+      "platform": "sx1280",
+      "board": "STM32L476RG + SX1280",
+      "role": "symbol image; machine-specific debug information removed",
+      "strategy": "direct-tail",
+      "covert_bytes": "runtime",
+      "encrypted_link": false,
+      "sha256": "eed4f1d2f1cd9a0d343f00bf869fc10328138fb9c4e820786e45d1546f8927f4"
+    }
+  ]
+}

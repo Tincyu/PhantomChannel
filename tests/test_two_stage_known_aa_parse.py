@@ -5,6 +5,7 @@ from unittest.mock import patch
 import tools.two_stage_known_aa_parse as parser_module
 from tools.two_stage_known_aa_parse import (
     add_stage1_fields,
+    consistency_anchor_clusters,
     deduplicate_rows,
     expand_stage2_known_access_addresses,
     measure_physical_length,
@@ -48,6 +49,39 @@ def test_bootstrap_excludes_advertising_aliases_and_has_no_upper_bound():
     assert len(clusters) == 3
     assert all(cluster["observation_count"] >= 10 for cluster in clusters)
     assert stats["rejected_advertising_rows"] == 30
+
+
+def test_consistency_anchor_requires_repeated_empty_before_data_pairs():
+    rows = []
+    for empty_sample, data_sample in ((1000, 1600), (10000, 10600), (19000, 19600)):
+        rows.append(
+            {
+                **connection_row("0x11223344", empty_sample),
+                "payload_len": "0",
+            }
+        )
+        rows.append(connection_row("0x11223344", data_sample))
+    # A single coincidental pair must not become the stage-2 AA.
+    rows.append(
+        {
+            **connection_row("0x55667788", 2000),
+            "payload_len": "0",
+        }
+    )
+    rows.append(connection_row("0x55667788", 2600))
+
+    clusters, stats = consistency_anchor_clusters(
+        rows,
+        sample_rate_sps=4_000_000.0,
+        window_us=1000.0,
+        min_pairs=2,
+        max_addresses=8,
+        excluded_addresses=("0x8E89BED6", "0xD6BE898E"),
+    )
+
+    assert [cluster["canonical_access_address"] for cluster in clusters] == ["0x11223344"]
+    assert clusters[0]["consistency_pair_count"] == 3
+    assert stats["candidate_address_count"] == 1
 
 
 def test_stage2_remap_uses_global_sample_and_known_cluster():

@@ -6,7 +6,6 @@
 \settopmatter{printacmref=false,printfolios=true}
 \renewcommand\footnotetextcopyrightpermission[1]{}
 \pagestyle{plain}
-\hypersetup{pdftitle={PhantomChannel Artifact Appendix},pdfauthor={Xu Zhang et al.}}
 \DeclareUrlCommand\file{\urlstyle{tt}}
 \begin{document}
 \title{PhantomChannel: Artifact Appendix}
@@ -17,206 +16,192 @@
 \section{Artifact Appendix}
 
 \subsection{Abstract}
-PhantomChannel embeds auxiliary symbols beyond the protocol-visible boundary
-of BLE packets and recovers them with an SDR receiver. The artifact contains
-transmitter and receiver source, tests, 14 firmware images for five platform
-families, two demonstration videos, and a self-contained offline experiment
-bundle. The bundle regenerates plots and numerical summaries from analysis-ready
-records. This appendix specifies the reproducible subset of the evaluation and
-the metric definitions used to interpret its outputs. Project-owned source is
-MIT licensed; videos are CC BY 4.0. Third-party code and firmware retain their
-file-level and vendor terms (\file{THIRD_PARTY_NOTICES.md}).
+PhantomChannel is a research prototype for embedding auxiliary symbols beyond
+BLE packet parsing boundaries and recovering them with an SDR receiver. The
+artifact supplies transmitter and receiver source, firmware images, tests,
+demonstration videos, and an offline experiment bundle. This appendix describes
+installation, execution, output inspection, and the scope of the supported
+replays. Project-owned source is MIT licensed; videos are CC BY 4.0. Third-party
+source and firmware retain their file-level and vendor terms; consult
+\file{THIRD_PARTY_NOTICES.md} before rebuilding or redistribution.
 
 \subsection{Description \& Requirements}
-The source archive contains \file{receiver/}, \file{firmware/},
+The source archive provides \file{receiver/}, \file{firmware/},
 \file{patches/zephyr/}, \file{configs/}, \file{tools/}, and \file{tests/}.
-The experiment archive contains \file{data/}, \file{scripts/}, \file{checks/},
-\file{reproduce_all.py}, and a reverse dependency map in
-\file{DEPENDENCY_MAP.md}. Generated CSV/JSON results are under
-\file{outputs/}; plots appear in the root and \file{plots/}. Each archive
-has its own README. The workflow reanalyzes retained records; it does not
-repeat RF acquisition or independently reconstruct all upstream measurements.
+The experiment archive provides \file{data/}, \file{scripts/},
+\file{checks/}, and \file{reproduce_all.py}.
+\file{DEPENDENCY_MAP.md} maps analysis inputs to outputs. Each archive has a
+README. Generated CSV/JSON files are written under \file{outputs/}; plots are
+written to the experiment root and \file{plots/}. The workflow reanalyzes
+retained records rather than performing new RF acquisition.
 
 \subsubsection{Security, privacy, and ethical concerns}
-Offline analysis requires no privileged access or radio transmission. Hardware
-evaluation flashes development boards and emits BLE traffic; flashing replaces
-the existing firmware. Use owned devices and authorized, isolated RF setups
-under applicable spectrum rules. Keep credentials and device identifiers out of
-shared configurations and captures. Published packet records use anonymous
-groups and relative timing.
+Offline execution requires no privileged access or radio transmission.
+Hardware evaluation replaces board firmware and emits BLE traffic. Use owned
+devices and authorized, isolated RF setups under applicable spectrum rules.
+Keep credentials and device identifiers out of shared configurations and
+captures. Published packet records use anonymous groups and relative timing.
 
 \subsubsection{How to access}
-The permanent artifact is available at
+The archived artifact is available at
 \href{https://doi.org/10.5281/zenodo.22842761}{doi:10.5281/\allowbreak zenodo.22842761}.
-The record version is \emph{PhantomChannel V1.0}; the archive suffix is
-\texttt{2026.09.19-ae}. Download the source and experiment ZIPs with that
-suffix, the top-level README, and \file{SHA256SUMS}. Verify downloaded
-files with \texttt{sha256sum --ignore-missing -c SHA256SUMS}.
-The maintained repository is
-\url{https://github.com/Tincyu/PhantomChannel}; the archived snapshot fixes
-the evaluation version.
+Download the source and experiment ZIPs with suffix \texttt{2026.09.19-ae},
+the top-level README, and \file{SHA256SUMS}. Verify downloaded files using
+\texttt{sha256sum --ignore-missing -c SHA256SUMS}.
+The maintained repository is \url{https://github.com/Tincyu/PhantomChannel}.
+Its \file{reproduction/} directory supplies the supplemental
+\file{requirements-verified.txt} and \file{ENVIRONMENT.md}; its
+\file{appendix/} directory supplies \file{verify_antenna_correctness.py}.
+Record the repository commit used for these supplemental files. The archived
+experiment ZIP fixes the inputs and scripts for the replay described here.
 
 \subsubsection{Hardware dependencies}
-Offline execution needs a conventional CPU workstation; no SDR, GPU, or BLE
-board is required. Allow approximately 2\,GB of working disk space and 4\,GB RAM
-as a practical budget. Optional live evaluation uses an nRF52840 DK transmitter,
-a compatible BLE peer, and a USRP B210 or X310 receiver; the 80-MHz bandwidth
-study uses X310. Alternative transmitters cover nRF52833, DA14695, EFR32MG24,
-CC2340R5, and STM32L476RG with SX1280. Board/image requirements are in
-\file{firmware/images/FIRMWARE_GUIDE.md}.
+Offline replay uses a conventional CPU workstation with sufficient memory and
+working disk space for extraction and generated plots. It requires no SDR, GPU,
+or BLE board. Optional live evaluation uses a supported BLE transmitter and
+peer together with a USRP B210 or X310 receiver. Supported transmitter families
+include Nordic, DA14695, EFR32MG24, CC2340R5, and STM32 with SX1280. Select
+boards and images using \file{firmware/images/FIRMWARE_GUIDE.md}; follow the
+platform-specific programming and runtime instructions there.
 
 \subsubsection{Software dependencies}
-Use Linux, Python 3.10+, \texttt{venv}, and \texttt{pip}. Source tests use
-Python 3.12 with NumPy 2.4.6, SciPy 1.17.1, PyYAML 6.0.3, and pytest 8.4.2
-as pinned in \file{requirements-test.txt}. Analysis declares NumPy
-$\geq$1.26, SciPy $\geq$1.11, and Matplotlib $\geq$3.8; an audited run used
-2.5.4, 1.18.1, and 3.11.2, respectively, on Python 3.12.3 / Ubuntu 24.04.4
-LTS. Record the actual Python/OS and
-\texttt{pip freeze} output for each run. Live reception additionally requires
-UHD and the selected receiver runtime; board rebuilding requires external
-vendor SDKs and toolchains. For Nordic, the guide specifies NCS 3.0.0-rc1
-and the controller patch base \texttt{v4.0.99-ncs1-1}.
+The verified analysis environment is Ubuntu 24.04.4 LTS with Python 3.12.3,
+NumPy 2.5.4, SciPy 1.18.1, and Matplotlib 3.11.2. The supplemental
+\file{requirements-verified.txt} pins the full installed analysis package set;
+\file{ENVIRONMENT.md} documents installation and environment capture. Source
+tests use the archive's separate \file{requirements-test.txt}.
+Live reception additionally requires UHD and the selected receiver runtime.
+Firmware builds require external vendor SDKs and toolchains; the firmware guide
+and controller patch notes specify the corresponding versions and base
+revisions. Vendor SDKs are not bundled.
 
 \subsubsection{Benchmarks}
-All offline inputs are bundled: 14 complex IQ packet windows, 23,789 parser
-candidate rows from 52 range runs, advertising timing records (including
-292,666 benign packets), connected timing vectors, three X310 bandwidth runs,
-four Data ablation rows, detector features/scores, and NLOS and antenna records.
-These are experiment-specific workloads. The advertising half of Table~4 and
-independent real-boundary PIP score reconstruction are outside this appendix's
-reproduction scope.
+The experiment archive includes packet IQ windows, parser candidates,
+advertising records, connected timing vectors, bandwidth summaries, Data
+ablation records, detector features and scores, and auxiliary NLOS and antenna
+records. These are experiment-specific workloads. Table~4 replay covers the
+Data portion. Real-boundary PIP summaries are archived diagnostics rather than
+independently regenerated packet-score evidence in this workflow.
 
 \subsection{Set Up}
 \subsubsection{Installation}
-Extract both ZIPs into separate directories. In the source archive root run:
+Extract the source and experiment ZIPs into separate directories. Copy the
+supplemental \file{requirements-verified.txt} into the extracted experiment
+root. In the source root, run:
 \begin{verbatim}
 python3 -m venv .venv
 .venv/bin/python -m pip install \
   -r requirements-test.txt
 \end{verbatim}
-In the experiment archive root run:
+In the experiment root, run:
 \begin{verbatim}
 python3 -m venv .venv
 .venv/bin/python -m pip install \
-  -r requirements.txt
+  -r requirements-verified.txt
+.venv/bin/python -m pip check
 \end{verbatim}
-Dependency installation needs network access or a local wheel cache;
-subsequent analysis is offline. Commands below run from the corresponding
-archive root, using its own virtual environment.
+Installation needs network access or a local wheel cache. Subsequent replay is
+offline. Keep the environments separate and run each command from the
+corresponding archive root. Save \texttt{python --version}, OS information,
+and \texttt{pip freeze} with the run, as detailed in the environment guide.
 
 \subsubsection{Basic test}
-In the source root, execute
-\texttt{.venv/bin/python -m pytest -q tests}; the archived suite's expected
-result is \texttt{163 passed}. In the experiment root, execute
-\texttt{.venv/bin/python scripts/recompute\_tables.py}; successful completion
-creates three CSVs in \file{outputs/recomputed_tables/}. A test pass checks
-software functionality; claim validation uses the data and definitions below.
+In the source root, run \texttt{.venv/bin/python -m pytest -q tests}.
+Success means the test command exits successfully with no failed tests.
+In the experiment root, run
+\texttt{.venv/bin/python scripts/recompute\_tables.py}.
+Expect successful completion and table CSVs under
+\file{outputs/recomputed_tables/}. These checks establish software readiness;
+experiment interpretation follows the scope and definitions below.
 
+\clearpage
 \subsection{Evaluation Workflow}
 \subsubsection{Major claims}
 \begin{compactitem}
-\item[(C1)] The recorded evaluation supports receiver behavior across bandwidth,
-range, SNR, and BPL/CAF configurations (paper evaluation, Fig.~10 and
-Tables~3--4; E1). The antenna comparison measures recovered candidate frames
-under a specified counting rule.
-\item[(C2)] The retained timing samples support approximately unchanged
-protocol-visible timing under the stated sample selection (paper
-observability evaluation, Fig.~12 and Table~5; E2).
-\item[(C3)] Retained IQ windows quantify spectral similarity; packet features
-and session-held-out scores quantify tail-energy observability for the
-supported detector views (paper Fig.~11 and countermeasure evaluation; E3).
+\item[(C1)] The receiver and auxiliary analyses support inspection of the recorded
+bandwidth, range, SNR, and BPL/CAF evaluation (paper Fig.~10 and Tables~3--4;
+E1), using explicitly defined frame-recovery metrics.
+\item[(C2)] The timing analyses characterize protocol-visible timing for the
+retained packet groups and selected samples (paper Fig.~12 and Table~5; E2).
+\item[(C3)] The spectral and tail-energy analyses characterize observability
+using retained IQ windows, eligible packet features, and supported
+session-held-out score views (paper Fig.~11 and countermeasure evaluation; E3).
 \end{compactitem}
 
 \subsubsection{Experiments}
-For the complete offline workflow, run
-\texttt{.venv/bin/python reproduce\_all.py} in the experiment root. Expect
-15 \texttt{[OK]} lines and exit status 0, including standalone, regression,
-plot, and metadata checks. A successful regression establishes agreement with
-the archived baseline. Use the following interpretation of the results.
-Time budgets below are planning estimates on a CPU workstation, excluding
-downloads; allow 10 person-minutes for initial setup and up to 30 compute-minutes
-for the complete run.
+In the experiment root, run:
+\begin{verbatim}
+.venv/bin/python reproduce_all.py
+\end{verbatim}
+Expect successful completion,
+\texttt{[OK]} status messages, and generated plots and result files. Regression
+checks establish agreement with the archived analysis baseline; they are not
+an independent confirmation of every value printed in the paper. As a planning
+estimate, allow about half an hour for setup, a few person-minutes to inspect
+each experiment group, and several compute-minutes per group on a conventional
+workstation; dependency downloads and host performance affect elapsed time.
 
 \begin{compactitem}
 \item[(E1)] \textbf{Receiver and auxiliary replay (C1).}
-\emph{Budget: 5 person-minutes + 10 compute-minutes.}
-\emph{Preparation:} use the bundled range, bandwidth, ablation, and auxiliary
-records without changing thresholds or excluding additional runs.
-\emph{Execution:} run the complete workflow above.
-\emph{Results:} inspect \file{figure10a.pdf}--\file{figure10c.pdf},
-\file{outputs/recomputed_tables/table3_bandwidth.csv},
-\file{table4_ablation.csv} in the same directory, and
-\file{outputs/auxiliary_experiments/}. Table~3 aggregates supplied run-level
-metrics; Table~4 covers four Data conditions. Range analysis applies sequence
-deduplication, pattern-based BER/PSR, and its documented collision-outlier rule
-($\mathrm{BER}>0.10$).
+\emph{Preparation:} retain the supplied range, bandwidth, ablation, and
+auxiliary records, together with the archived thresholds and run-selection
+rules. \emph{Execution:} run the complete workflow above.
+\emph{Results:} inspect the overhead, range, and SNR plots, the bandwidth and
+Data-ablation CSVs under \file{outputs/recomputed_tables/}, and the outputs
+under \file{outputs/auxiliary_experiments/}. The dependency map identifies each
+input and analysis entry point.
 
-For the 60-m antenna replay, candidate recovery is the number of unique
-sequence representatives divided by 200 nominal opportunities per run.
-Full-frame rate counts the six-byte header/check and does not require a valid
-XOR check. Across 11 default and 8 SAS-571 runs, the corresponding means are
-55.0455\% / 53.9371\,kbps and 88.5625\% / 86.7857\,kbps.
-These are candidate-recovery and full-frame-rate metrics, not verified useful
-payload delivery. The companion \file{verify_antenna_correctness.py}, run
-with the extracted experiment root as its argument after the replay,
-applies exact-pattern plus integrity checking to the same selected
-candidates, yielding 39.0909\% and 61.4375\%; excluding header/check and the fixed
-A5 marker yields 37.2122 and 58.4856\,kbps. Nominal opportunities are not
-independent transmitter ground truth. This correctness comparison is specific
-to the antenna records and is not extrapolated to other experiments.
+Interpret candidate recovery, full-frame rate, and correct useful-payload rate
+separately. Candidate recovery counts unique sequence representatives against
+the recorded nominal opportunities. Full-frame rate includes framing bytes and
+need not require integrity acceptance. Correct useful-payload rate requires
+known-pattern agreement and integrity acceptance, excludes framing and the
+fixed marker, and uses capture duration as the time denominator. After replay,
+run the companion \file{verify_antenna_correctness.py} with the extracted
+experiment root as its argument to inspect the stricter antenna metrics.
+Nominal opportunities are not independent transmitter ground truth; this
+correctness comparison is confined to the antenna records.
 
 \item[(E2)] \textbf{Timing replay (C2).}
-\emph{Budget: 5 person-minutes + 10 compute-minutes.}
-\emph{Preparation:} retain the supplied packet groups and timing vectors.
-\emph{Execution:} run the complete workflow; tables alone can be regenerated
-with \texttt{.venv/bin/python scripts/recompute\_tables.py}.
-\emph{Results:} inspect \file{figure12a.png}, \file{figure12b.png}, and
-\file{outputs/recomputed_tables/table5_conn_timing.csv}.
-Peripheral event-interval means are 29.999519, 29.999529, and 29.999582\,ms
-for input datasets \texttt{normal}, \texttt{embed\_16B}, and
-\texttt{embed\_240B}, with $n=59,55,57$; each median is 29.999971\,ms.
-The central normal gap/event means are 150.300\,$\mu$s / 50.000906\,ms.
-The upstream peripheral analyzer uses adjacent channel-block first-packet
-times, a preceding block ending P$\to$C and containing an HR notification, and a
-30$\pm$5\,ms interval filter. Conclusions concern these selected samples.
-Use \texttt{Input\_dataset} to identify the short-tail condition:
-the script's \texttt{embed\_8B} output alias maps to input
-\texttt{embed\_16B}; the alias alone does not establish transmitted length.
+\emph{Preparation:} preserve packet grouping, timing vectors, and the archived
+sample-selection rules. \emph{Execution:} run the complete workflow, or
+\texttt{.venv/bin/python scripts/recompute\_tables.py} for tables alone.
+\emph{Results:} inspect the advertising timing plots and
+\file{outputs/recomputed_tables/table5_conn_timing.csv}. Use
+\texttt{Input\_dataset} to trace each output condition to its input vector.
+Condition aliases describe archived datasets; they do not independently certify
+transmitted payload length. The summaries describe the retained, filtered
+samples and are not presented here as a reconstruction of the paper's
+historical timing means.
 
 \item[(E3)] \textbf{Spectral and detector replay (C3).}
-\emph{Budget: 5 person-minutes + 10 compute-minutes.}
-\emph{Preparation:} use the supplied IQ windows, feature eligibility masks,
-and session-level out-of-fold scores.
-\emph{Execution:} run the complete workflow; the detector-only entry is
+\emph{Preparation:} retain the IQ group identities, feature eligibility masks,
+and session grouping. \emph{Execution:} run the complete workflow. Detector
+analysis alone uses
 \texttt{.venv/bin/python scripts/tail\_energy.py}.
-\emph{Results:} quantitative spectral evidence is in
-\file{outputs/frequency_similarity.csv} and
-\file{outputs/frequency_pip_pairwise.csv}. Cosine similarity is computed on
-Welch PSDs converted to dB and independently min--max normalized, at 4\,MS/s
-with a 1024-point FFT. Adv uses windows 0022/0049, Data 0002/0000; PIP is
-the mean of 24 pairs between normal windows 0000--0005 and PIP windows
-0006--0009. The respective similarities are 99.7693\%, 98.8913\%, and
-96.0272\%. A single spectrum overlay is not the 24-pair PIP statistic;
-validation uses these numeric outputs.
+\emph{Results:} inspect \file{outputs/frequency_similarity.csv} and
+\file{outputs/frequency_pip_pairwise.csv}. The metric uses cosine similarity
+of Welch PSDs converted to dB and independently min--max normalized. PIP
+validation uses the cross-group pairwise statistic; an illustrative spectrum
+overlay is not evidence of that aggregate metric.
 
 Inspect \file{outputs/tail_energy/advertising_formal_roc.csv} and
-\file{connected_session_oof.csv} in the same directory. Advertising AUC/TPR
-is recomputed from eligible packet features. Connected five-fold session-level
-scores cover direct-tail and PIP outer-boundary views; AUC / TPR at
-FPR $\leq$5\% is 0.962703 / 75.6757\% and 0.520000 / 3.8462\%, respectively.
-The separate \file{connected_pip_auc.csv} is an archived summary, not a
-new score-level reconstruction. Its real-boundary 4/64\,$\mu$s guard/window
-diagnostic (AUC 0.935128, TPR 71.1538\%) and the historical fixed 16/6\,$\mu$s
-diagnostic (0.957949, 76.9231\%) have different parameters. Neither is claimed
-here as independently reproduced session-held-out real-boundary evidence.
+\file{connected_session_oof.csv} in the same directory for feature-based
+advertising replay and the direct-tail/PIP outer-boundary session-held-out
+views. Treat \file{connected_pip_auc.csv} as an archived diagnostic summary.
+Real-boundary diagnostic configurations must be distinguished by guard,
+window, boundary mapping, and sample eligibility; they are not interchangeable
+with session-held-out validation. Independent real-boundary score
+reconstruction is outside the reproduction claim made here.
 \end{compactitem}
 
 \subsection{Notes on Reusability}
-Use \file{DEPENDENCY_MAP.md} to replace inputs while preserving schemas,
-grouping, sample masks, and metric definitions. Keep original records and
-environment manifests with new outputs. The firmware guide provides optional
-flash/control commands and expected acknowledgements; hardware/RF acceptance
-requires a separate live run.
+Use \file{DEPENDENCY_MAP.md} and the archive READMEs to replace inputs while
+preserving schemas, grouping, sample masks, and metric definitions. Keep input
+checksums, environment manifests, and generated results together. Changing
+inputs or processing rules defines a new analysis and should be documented
+separately from the archived replay. Hardware/RF acceptance requires a separate
+live run using the firmware guide.
 
 \subsection{Version}
 Based on the LaTeX template for Artifact Evaluation V20220926.

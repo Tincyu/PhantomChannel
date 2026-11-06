@@ -2,12 +2,15 @@
 
 This directory contains the analysis source used by the experiment release.
 The released `PhantomChannel-experiment-reproduction-2026.09.19-ae.zip`
-supplies the analysis-ready data and regression references. Install Python
-3.10+ and the requirements, then run from the repository root:
+supplies the analysis-ready data and regression references. Use the tested
+Python 3.12 environment, then run from the repository root. The commands
+below select the pinned, verified analysis environment; see
+[ENVIRONMENT.md](ENVIRONMENT.md) for the tested Python/OS, archived-package
+instructions and environment capture:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r reproduction/requirements.txt
+.venv/bin/python -m pip install -r reproduction/requirements-verified.txt
 .venv/bin/python reproduction/run.py \
   --bundle /path/to/PhantomChannel-experiment-reproduction-2026.09.19-ae.zip \
   --output-dir artifacts/offline-reproduction

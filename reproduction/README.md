@@ -1,5 +1,8 @@
 # Offline experiment reproduction
 
+Start with the [artifact guide](../docs/artifact-guide.md) for the workflow
+overview, environment links, interpretation notes and reproduction scope.
+
 This directory contains the analysis source used by the experiment release.
 The released `PhantomChannel-experiment-reproduction-2026.09.19-ae.zip`
 supplies the analysis-ready data and regression references. Use the tested

@@ -4,6 +4,12 @@
 source in `phantomchannel-appendix.tex`. It follows the CCS artifact template
 and focuses on access, environment setup, execution and output inspection.
 It does not repeat experimental result values or fixed test/sample counts.
+Its maintained operational entry point is the
+[artifact guide](../docs/artifact-guide.md). Tested environments, pinned
+dependency files and platform details are documented through that guide so
+compatibility and workflow notes can evolve without hard-coding their full
+contents in the submitted appendix. Archived replay and maintained analyses
+remain separately identified.
 
 Build with an installation of Tectonic, or a LaTeX environment containing
 `acmart`, `paralist`, `xurl` and the ACM class's font dependencies:
